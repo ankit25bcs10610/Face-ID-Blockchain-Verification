@@ -6,6 +6,8 @@ import pytest
 
 from src.search import index_builder
 from src.search.index_builder import DatasetError, build_index, discover_posts
+from src.search.candidate_ranker import CandidatePost, rank_candidates
+from src.search import orchestrator
 
 
 def make_post(root, name, post_id, image=True):
@@ -37,6 +39,18 @@ class FakeFaiss:
     @staticmethod
     def write_index(index, path):
         open(path, "wb").write(index.vectors.tobytes())
+
+    @staticmethod
+    def read_index(path):
+        return FakeSearchIndex()
+
+
+class FakeSearchIndex:
+    d = 512
+    ntotal = 3
+
+    def search(self, query, limit):
+        return np.array([[0.9, 0.7, 0.4]], dtype=np.float32)[:, :limit], np.array([[1, 0, 2]], dtype=np.int64)[:, :limit]
 
 
 def test_discover_posts_reads_metadata_and_images(tmp_path):
@@ -79,3 +93,23 @@ def test_invalid_post_is_skipped(tmp_path, monkeypatch):
 def test_missing_posts_directory_fails(tmp_path):
     with pytest.raises(DatasetError):
         discover_posts(tmp_path / "missing")
+
+
+def test_rank_candidates_orders_by_similarity():
+    items = [CandidatePost("b", 0.2, "b.jpg", {}), CandidatePost("a", 0.9, "a.jpg", {})]
+    assert [item.post_id for item in rank_candidates(items)] == ["a", "b"]
+
+
+def test_orchestrator_uses_faiss_and_manifest(tmp_path, monkeypatch):
+    index_path = tmp_path / "faces.index"
+    index_path.write_bytes(b"index")
+    manifest_path = tmp_path / "manifest.json"
+    manifest_path.write_text(json.dumps([
+        {"post_id": "post_001", "image_path": "one.jpg", "metadata": {"caption": "one"}},
+        {"post_id": "post_002", "image_path": "two.jpg", "metadata": {"caption": "two"}},
+        {"post_id": "post_003", "image_path": "three.jpg", "metadata": {"caption": "three"}},
+    ]))
+    monkeypatch.setattr(orchestrator, "_faiss_module", lambda: FakeFaiss)
+    results = orchestrator.search_candidates(np.eye(512, dtype=np.float32)[0], index_path, manifest_path, top_k=2)
+    assert [item.post_id for item in results] == ["post_002", "post_001"]
+    assert results[0].similarity_score == pytest.approx(0.9)

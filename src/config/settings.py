@@ -31,3 +31,13 @@ IMAGE_EXTENSIONS = tuple(
     for extension in os.getenv("IMAGE_EXTENSIONS", ".jpg,.jpeg,.png").split(",")
     if extension.strip()
 )
+TOP_K = int(os.getenv("TOP_K", "5"))
+MATCH_THRESHOLD = float(os.getenv("MATCH_THRESHOLD", "0.80"))
+FACE_SIMILARITY_WEIGHT = float(os.getenv("FACE_SIMILARITY_WEIGHT", "0.70"))
+IMAGE_SIMILARITY_WEIGHT = float(os.getenv("IMAGE_SIMILARITY_WEIGHT", "0.20"))
+METADATA_CONSISTENCY_WEIGHT = float(os.getenv("METADATA_CONSISTENCY_WEIGHT", "0.10"))
+METADATA_FIELDS = tuple(
+    field.strip() for field in os.getenv("METADATA_FIELDS", "platform,caption,timestamp").split(",") if field.strip()
+)
+EVIDENCE_DIR = os.getenv("EVIDENCE_DIR", "data/evidence")
+EVIDENCE_VERSION = os.getenv("EVIDENCE_VERSION", "1.0")
