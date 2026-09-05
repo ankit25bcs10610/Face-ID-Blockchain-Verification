@@ -6,6 +6,7 @@ from src.search.candidate_ranker import CandidatePost
 from src.verification.matcher import MatchVerificationError, metadata_consistency, verify_match
 from src.verification.evidence import EvidenceError, canonicalize_evidence, create_evidence, save_evidence
 from src.verification.hasher import generate_hash
+from src.blockchain import verifier as blockchain_verifier
 
 
 def candidate(score=0.9, image_path=""):
@@ -65,3 +66,29 @@ def test_unverified_match_cannot_create_evidence():
     result = verify_match(candidate(0.2), threshold=0.8, image_weight=0, metadata_weight=0.1)
     with pytest.raises(EvidenceError):
         create_evidence(result)
+
+
+def test_tamper_helper_does_not_mutate_original():
+    evidence = {"caption": "original", "post_id": "post_001"}
+    modified = blockchain_verifier.tamper_evidence(evidence, "caption", "changed")
+    assert evidence["caption"] == "original"
+    assert modified["caption"] == "changed"
+
+
+def test_reverification_returns_verified_or_tamper_detected(monkeypatch):
+    evidence = {"caption": "original", "post_id": "post_001"}
+    stored_hash = generate_hash(evidence)
+    record = {
+        "evidence_hash": "0x" + stored_hash,
+        "exists": True,
+        "timestamp": 123,
+        "verifier": "0xabc",
+        "contract_address": "0xcontract",
+    }
+    reader = lambda *_args, **_kwargs: record
+    verified = blockchain_verifier.reverify_evidence(evidence, evidence_reader=reader)
+    assert verified["status"] == "VERIFIED"
+    tampered = blockchain_verifier.tamper_evidence(evidence, "caption", "changed")
+    record["evidence_hash"] = "0x" + stored_hash
+    result = blockchain_verifier.reverify_evidence(tampered, evidence_reader=reader)
+    assert result["status"] == "TAMPER DETECTED"
