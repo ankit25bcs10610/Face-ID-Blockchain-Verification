@@ -1,0 +1,10 @@
+insightface
+opencv-python
+numpy
+faiss-cpu
+web3
+python-dotenv
+Pillow
+ImageHash
+pytest
+
