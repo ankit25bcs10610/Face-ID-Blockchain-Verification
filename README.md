@@ -39,45 +39,9 @@ Images and metadata added to that corpus must be user-owned, explicitly consente
 
 ## Architecture
 
-```text
-                        +--------------------+
-                        |  Input face image  |
-                        +---------+----------+
-                                  |
-                                  v
-        +-----------------------------------------------+
-        | Face module                                   |
-        | validation -> detection -> landmarks -> align |
-        | -> normalized 512-D ArcFace embedding         |
-        +----------------------+------------------------+
-                               |
-                               v
-        +-----------------------------------------------+
-        | AuthorizedDatasetProvider                     |
-        | authorized post corpus + persisted FAISS data |
-        +----------------------+------------------------+
-                               |
-                               v
-        +-----------------------------------------------+
-        | Search and verification                       |
-        | FAISS -> ranked candidates -> confidence      |
-        +----------------------+------------------------+
-                               |
-                               v
-        +-----------------------------------------------+
-        | Evidence and integrity                        |
-        | canonical JSON -> UTF-8 bytes -> SHA-256      |
-        +----------------------+------------------------+
-                               |
-                               v
-        +-----------------------------------------------+
-        | EvidenceRegistry.sol                          |
-        | fingerprint + block time + submitter          |
-        +----------------------+------------------------+
-                               |
-                               v
-                         Re-verification verdict
-```
+![TraceChain AI architecture: authorized face processing, FAISS search, verification, evidence hashing, blockchain registration, and re-verification](assets/tracechain-architecture.png)
+
+The diagram summarizes the real pipeline implementation. The optional reverse-image-search branch shown is intentionally not enabled by the default provider; the repository searches only the authorized local dataset described in this README.
 
 ## Workflow
 
