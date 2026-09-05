@@ -3,8 +3,8 @@ opencv-python
 numpy
 faiss-cpu
 web3
+py-solc-x
 python-dotenv
 Pillow
 ImageHash
 pytest
-

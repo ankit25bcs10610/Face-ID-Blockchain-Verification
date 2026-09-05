@@ -41,3 +41,8 @@ METADATA_FIELDS = tuple(
 )
 EVIDENCE_DIR = os.getenv("EVIDENCE_DIR", "data/evidence")
 EVIDENCE_VERSION = os.getenv("EVIDENCE_VERSION", "1.0")
+BLOCKCHAIN_RPC_URL = os.getenv("BLOCKCHAIN_RPC_URL", "")
+PRIVATE_KEY = os.getenv("PRIVATE_KEY", "")
+WALLET_ADDRESS = os.getenv("WALLET_ADDRESS", "")
+CONTRACT_ADDRESS = os.getenv("CONTRACT_ADDRESS", "")
+CONTRACT_ARTIFACT_PATH = os.getenv("CONTRACT_ARTIFACT_PATH", "build/EvidenceRegistry.json")
