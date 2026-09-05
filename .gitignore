@@ -16,11 +16,15 @@ env/
 # Environment and secrets
 .env
 !.env.example
+*.key
+*.pem
+wallets/
 
 # Generated indexes, embeddings, and evidence
 data/embeddings/*
 data/faiss/*
 data/evidence/*
+build/*
 
 # Keep directory markers
 !.gitkeep
@@ -29,4 +33,4 @@ data/evidence/*
 .DS_Store
 .idea/
 .vscode/
-
+*.log

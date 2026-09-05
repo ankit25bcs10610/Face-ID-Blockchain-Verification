@@ -19,6 +19,10 @@ def connect_to_blockchain(rpc_url: str | None = None) -> Web3:
     web3 = Web3(Web3.HTTPProvider(endpoint))
     if not web3.is_connected():
         raise BlockchainError(f"Unable to connect to blockchain RPC: {endpoint}")
+    if settings.CHAIN_ID and web3.eth.chain_id != settings.CHAIN_ID:
+        raise BlockchainError(
+            f"Connected to chain ID {web3.eth.chain_id}, expected {settings.CHAIN_ID}"
+        )
     return web3
 
 

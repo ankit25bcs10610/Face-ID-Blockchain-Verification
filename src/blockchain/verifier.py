@@ -25,17 +25,27 @@ def reverify_evidence(evidence: dict, web3=None, contract=None, evidence_reader=
             raise ReverificationError("Web3.py is required for blockchain re-verification") from exc
         evidence_reader = get_evidence
     local_hash = generate_hash(evidence)
-    record = evidence_reader(local_hash, web3=web3, contract=contract)
-    blockchain_hash = record["evidence_hash"]
-    verified = bool(record["exists"]) and _normal_hash(local_hash) == _normal_hash(blockchain_hash)
+    try:
+        record = evidence_reader(local_hash, web3=web3, contract=contract)
+        blockchain_hash = record["evidence_hash"]
+        on_chain_exists = bool(record["exists"])
+    except (KeyError, TypeError, ValueError) as exc:
+        raise ReverificationError(f"Invalid blockchain evidence record: {exc}") from exc
+    if not isinstance(blockchain_hash, str):
+        raise ReverificationError("Blockchain evidence hash must be text")
+    verified = on_chain_exists and _normal_hash(local_hash) == _normal_hash(blockchain_hash)
     return {
         "verified": verified,
         "status": "VERIFIED" if verified else "TAMPER DETECTED",
         "local_hash": local_hash,
         "blockchain_hash": blockchain_hash,
+        "on_chain_exists": on_chain_exists,
         "timestamp": record["timestamp"],
         "verifier": record["verifier"],
         "contract_address": record["contract_address"],
+        "reason": "Evidence matches the on-chain record" if verified else (
+            "No on-chain record exists" if not on_chain_exists else "Evidence does not match the on-chain record"
+        ),
         "message": "Evidence matches the on-chain record" if verified else "Evidence does not match the on-chain record",
     }
 

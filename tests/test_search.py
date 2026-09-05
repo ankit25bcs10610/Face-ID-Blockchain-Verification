@@ -8,6 +8,7 @@ from src.search import index_builder
 from src.search.index_builder import DatasetError, build_index, discover_posts
 from src.search.candidate_ranker import CandidatePost, rank_candidates
 from src.search import orchestrator
+from src.search.providers.authorized_dataset import AuthorizedDatasetProvider
 
 
 def make_post(root, name, post_id, image=True):
@@ -113,3 +114,18 @@ def test_orchestrator_uses_faiss_and_manifest(tmp_path, monkeypatch):
     results = orchestrator.search_candidates(np.eye(512, dtype=np.float32)[0], index_path, manifest_path, top_k=2)
     assert [item.post_id for item in results] == ["post_002", "post_001"]
     assert results[0].similarity_score == pytest.approx(0.9)
+
+
+def test_detailed_search_generates_dynamic_audit_metadata(monkeypatch):
+    class Provider:
+        name = "consented_fixture"
+
+        def search(self, embedding, top_k):
+            return [CandidatePost("post", 0.8, "post.jpg", {})]
+
+    response = orchestrator.search_detailed(np.ones(512, dtype=np.float32), provider=Provider())
+    assert response.provider == "consented_fixture"
+    assert response.embedding_dimension == 512
+    assert response.candidate_count == 1
+    assert response.search_id
+    assert response.timestamp.endswith("Z")

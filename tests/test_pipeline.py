@@ -27,7 +27,11 @@ def test_run_pipeline_connects_all_stages(monkeypatch, tmp_path):
     monkeypatch.setattr(pipeline, "validate_image", lambda _: (object(), quality))
     monkeypatch.setattr(pipeline, "detect_face", lambda _: face)
     monkeypatch.setattr(pipeline, "extract_embedding", lambda _: np.ones(512, dtype=np.float32))
-    monkeypatch.setattr(pipeline, "search_candidates", lambda *_args, **_kwargs: [candidate])
+    search_response = type("SearchResponse", (), {
+        "results": [candidate], "search_id": "search-id", "provider": "consented_fixture",
+        "as_dict": lambda self: {"search_id": self.search_id, "provider": self.provider, "results": []},
+    })()
+    monkeypatch.setattr(pipeline, "search_detailed", lambda *_args, **_kwargs: search_response)
     monkeypatch.setattr(pipeline, "verify_match", lambda *_args, **_kwargs: match)
     monkeypatch.setattr(pipeline, "_image_hash", lambda _: "phash")
     monkeypatch.setattr(pipeline, "save_evidence", lambda evidence: tmp_path / "evidence.json")

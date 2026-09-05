@@ -75,4 +75,10 @@ def detect_face(image_path: str | Path) -> DetectedFace:
         raise NoFaceDetectedError("No face detected in image")
     if len(faces) > 1 and not settings.ALLOW_MULTIPLE_FACES:
         raise MultipleFacesDetectedError(f"Detected {len(faces)} faces; exactly one is required")
-    return max(faces, key=lambda face: face.detection_confidence)
+    selected = max(faces, key=lambda face: face.detection_confidence)
+    if selected.detection_confidence < settings.FACE_MIN_CONFIDENCE:
+        raise FaceProcessingError(
+            f"Face confidence {selected.detection_confidence:.3f} is below the configured minimum "
+            f"{settings.FACE_MIN_CONFIDENCE:.3f}"
+        )
+    return selected

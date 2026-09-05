@@ -43,6 +43,9 @@ def register_evidence(
         tx_hash = web3.eth.send_raw_transaction(signed.raw_transaction)
         receipt = web3.eth.wait_for_transaction_receipt(tx_hash)
         block = web3.eth.get_block(receipt.blockNumber)
+        status = int(receipt.status)
+        if status != 1:
+            raise BlockchainError(f"Evidence registration transaction reverted: {tx_hash.hex()}")
     except Exception as exc:
         raise BlockchainError(f"Evidence registration failed: {exc}") from exc
     return {
@@ -50,6 +53,8 @@ def register_evidence(
         "block_number": receipt.blockNumber,
         "timestamp": datetime.fromtimestamp(block.timestamp, timezone.utc).isoformat().replace("+00:00", "Z"),
         "contract_address": contract.address,
+        "status": status,
+        "verifier": sender,
     }
 
 
@@ -69,6 +74,8 @@ def get_evidence(evidence_hash: str | bytes, web3=None, contract=None) -> dict:
         value = contract.functions.getEvidence(_hash_bytes32(evidence_hash)).call()
     except Exception as exc:
         raise BlockchainError(f"Unable to retrieve evidence: {exc}") from exc
+    if not isinstance(value, (tuple, list)) or len(value) != 4:
+        raise BlockchainError("Unexpected evidence record returned by contract")
     return {
         "evidence_hash": "0x" + value[0].hex(),
         "timestamp": value[1],

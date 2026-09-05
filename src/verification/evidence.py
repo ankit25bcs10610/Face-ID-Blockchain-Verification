@@ -1,6 +1,7 @@
 """Structured, deterministic evidence records for verified matches."""
 
 import json
+import uuid
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -22,7 +23,7 @@ def _json_safe(value: Any) -> Any:
     return value
 
 
-def create_evidence(result: MatchResult, image_hash: str | None = None) -> dict:
+def create_evidence(result: MatchResult, image_hash: str | None = None, search=None, threshold: float | None = None) -> dict:
     if not isinstance(result, MatchResult):
         raise EvidenceError("result must be a MatchResult")
     if not result.match:
@@ -30,6 +31,11 @@ def create_evidence(result: MatchResult, image_hash: str | None = None) -> dict:
     metadata = result.candidate.metadata
     evidence = {
         "version": settings.EVIDENCE_VERSION,
+        "evidence_id": str(uuid.uuid4()),
+        "search": {
+            "search_id": getattr(search, "search_id", None),
+            "provider": getattr(search, "provider", None),
+        },
         "post_id": result.candidate.post_id,
         "platform": metadata.get("platform"),
         "post_url": metadata.get("post_url"),
@@ -40,6 +46,7 @@ def create_evidence(result: MatchResult, image_hash: str | None = None) -> dict:
         "image_similarity": result.image_similarity,
         "metadata_consistency": result.metadata_consistency,
         "final_confidence": result.confidence,
+        "match_threshold": threshold if threshold is not None else settings.MATCH_THRESHOLD,
         "verification_timestamp": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
     }
     return _json_safe(evidence)
@@ -55,7 +62,7 @@ def canonicalize_evidence(evidence: dict) -> str:
 
 
 def save_evidence(evidence: dict, evidence_path: str | Path | None = None) -> Path:
-    path = Path(evidence_path) if evidence_path else Path(settings.EVIDENCE_DIR) / f"{evidence['post_id']}.json"
+    path = Path(evidence_path) if evidence_path else Path(settings.EVIDENCE_DIR) / f"{evidence['evidence_id']}.json"
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(canonicalize_evidence(evidence), encoding="utf-8")
     return path

@@ -1,6 +1,7 @@
 """Build a FAISS index from an authorized, consented post dataset."""
 
 import json
+from datetime import datetime, timezone
 from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Callable
@@ -118,6 +119,7 @@ def build_index(
     embeddings_path = Path(embeddings_dir) / settings.EMBEDDINGS_NAME
     index_path = Path(faiss_dir) / settings.INDEX_NAME
     manifest_path = Path(faiss_dir) / settings.MANIFEST_NAME
+    metadata_path = Path(faiss_dir) / settings.INDEX_METADATA_NAME
     embeddings_path.parent.mkdir(parents=True, exist_ok=True)
     index_path.parent.mkdir(parents=True, exist_ok=True)
     np.save(embeddings_path, matrix)
@@ -126,6 +128,13 @@ def build_index(
         json.dumps([asdict(record) for record in records], indent=2, ensure_ascii=False),
         encoding="utf-8",
     )
+    metadata_path.write_text(json.dumps({
+        "schema_version": "1.0",
+        "embedding_dimension": int(matrix.shape[1]),
+        "index_type": "IndexFlatIP",
+        "record_count": int(matrix.shape[0]),
+        "created_at": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+    }, indent=2), encoding="utf-8")
     return IndexBuildResult(
         len(records), total_post_dirs - len(records), str(index_path),
         str(embeddings_path), str(manifest_path), errors,

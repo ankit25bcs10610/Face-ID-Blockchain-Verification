@@ -1,6 +1,9 @@
 """Nearest-neighbor search over the persisted authorized-content index."""
 
 import json
+import uuid
+from dataclasses import dataclass
+from datetime import datetime, timezone
 from pathlib import Path
 
 import numpy as np
@@ -11,6 +14,34 @@ from src.search.candidate_ranker import CandidatePost, rank_candidates
 
 class SearchError(RuntimeError):
     """Raised when the FAISS search cannot be completed."""
+
+
+@dataclass(frozen=True)
+class SearchResponse:
+    search_id: str
+    timestamp: str
+    provider: str
+    embedding_dimension: int
+    candidate_count: int
+    results: list[CandidatePost]
+
+    def as_dict(self) -> dict:
+        return {
+            "search_id": self.search_id,
+            "timestamp": self.timestamp,
+            "provider": self.provider,
+            "query": {"embedding_dimension": self.embedding_dimension},
+            "candidate_count": self.candidate_count,
+            "results": [
+                {
+                    "post_id": result.post_id,
+                    "similarity_score": result.similarity_score,
+                    "image_path": result.image_path,
+                    "metadata": result.metadata,
+                }
+                for result in self.results
+            ],
+        }
 
 
 def _faiss_module():
@@ -79,3 +110,29 @@ def search_candidates(
 
 def search(face_embedding: np.ndarray, top_k: int = settings.TOP_K) -> list[CandidatePost]:
     return search_candidates(face_embedding, top_k=top_k)
+
+
+def search_detailed(
+    face_embedding: np.ndarray,
+    top_k: int = settings.TOP_K,
+    provider=None,
+) -> SearchResponse:
+    """Execute a configured authorized provider search with dynamic audit metadata."""
+    if provider is None:
+        from src.search.providers.authorized_dataset import AuthorizedDatasetProvider
+
+        provider = AuthorizedDatasetProvider()
+    if top_k <= 0:
+        raise SearchError("top_k must be greater than zero")
+    query = np.asarray(face_embedding).reshape(-1)
+    if query.size != 512:
+        raise SearchError("Face embedding must be 512-dimensional")
+    results = provider.search(face_embedding, top_k)
+    return SearchResponse(
+        search_id=str(uuid.uuid4()),
+        timestamp=datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+        provider=getattr(provider, "name", provider.__class__.__name__),
+        embedding_dimension=int(query.size),
+        candidate_count=len(results),
+        results=results,
+    )
