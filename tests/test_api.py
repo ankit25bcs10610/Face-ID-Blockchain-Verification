@@ -8,6 +8,12 @@ from src.api.main import app
 client = TestClient(app)
 
 
+def test_root_points_to_api_resources():
+    response = client.get("/")
+    assert response.status_code == 200
+    assert response.json()["docs"] == "/docs"
+
+
 def test_health_reports_component_status(monkeypatch):
     from src.api.routes import health
 

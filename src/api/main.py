@@ -32,6 +32,16 @@ app.include_router(search.router)
 app.include_router(verification.router)
 
 
+@app.get("/", include_in_schema=False, summary="API service information")
+def root() -> dict[str, str]:
+    return {
+        "service": app.title,
+        "message": "TraceChain AI API is running",
+        "health": "/health",
+        "docs": "/docs",
+    }
+
+
 @app.middleware("http")
 async def request_logging(request: Request, call_next):
     request_id = str(uuid.uuid4())
