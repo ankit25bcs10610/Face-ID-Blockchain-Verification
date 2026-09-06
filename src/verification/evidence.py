@@ -23,7 +23,13 @@ def _json_safe(value: Any) -> Any:
     return value
 
 
-def create_evidence(result: MatchResult, image_hash: str | None = None, search=None, threshold: float | None = None) -> dict:
+def create_evidence(
+    result: MatchResult,
+    image_hash: str | None = None,
+    search=None,
+    threshold: float | None = None,
+    pipeline_id: str | None = None,
+) -> dict:
     if not isinstance(result, MatchResult):
         raise EvidenceError("result must be a MatchResult")
     if not result.match:
@@ -32,6 +38,7 @@ def create_evidence(result: MatchResult, image_hash: str | None = None, search=N
     evidence = {
         "version": settings.EVIDENCE_VERSION,
         "evidence_id": str(uuid.uuid4()),
+        "pipeline_id": pipeline_id,
         "search": {
             "search_id": getattr(search, "search_id", None),
             "provider": getattr(search, "provider", None),

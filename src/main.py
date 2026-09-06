@@ -56,38 +56,48 @@ def run_pipeline(
     settings.validate()
     pipeline_id = str(uuid.uuid4())
 
-    def stage(name: str, started: float, success: bool = True, error: str | None = None) -> None:
+    def execute_stage(name: str, operation):
+        logger.info("pipeline_stage pipeline_id=%s stage=%s status=started", pipeline_id, name)
+        started = time.perf_counter()
+        try:
+            result = operation()
+        except Exception as exc:
+            logger.error(
+                "pipeline_stage pipeline_id=%s stage=%s status=failed duration_ms=%.2f error_type=%s",
+                pipeline_id,
+                name,
+                (time.perf_counter() - started) * 1000,
+                type(exc).__name__,
+            )
+            raise
         logger.info(
-            "pipeline_stage pipeline_id=%s stage=%s success=%s duration_ms=%.2f%s",
-            pipeline_id, name, success, (time.perf_counter() - started) * 1000,
-            f" error={error}" if error else "",
+            "pipeline_stage pipeline_id=%s stage=%s status=completed duration_ms=%.2f",
+            pipeline_id,
+            name,
+            (time.perf_counter() - started) * 1000,
         )
+        return result
     print("TRACECHAIN AI")
     print("Face Identification & Blockchain Verification")
     print("=" * 48)
 
     print("[1/10] Validating image...")
-    started = time.perf_counter()
-    _, quality = validate_image(image_path)
-    stage("IMAGE_VALIDATION", started)
+    _, quality = execute_stage("IMAGE_VALIDATION", lambda: validate_image(image_path))
     print(f"  Image valid: {quality.width}x{quality.height}, quality={quality.quality_score:.3f}")
 
     print("[2/10] Detecting face...")
-    started = time.perf_counter()
-    detected_face = detect_face(image_path)
-    stage("FACE_DETECTION", started)
+    detected_face = execute_stage("FACE_DETECTION", lambda: detect_face(image_path))
     print(f"  Face detected: confidence={detected_face.detection_confidence:.3f}")
 
     print("[3/10] Generating embedding...")
-    started = time.perf_counter()
-    embedding = extract_embedding(image_path)
-    stage("EMBEDDING_GENERATION", started)
+    embedding = execute_stage("EMBEDDING_GENERATION", lambda: extract_embedding(image_path))
     print(f"  Embedding dimensions: {embedding.shape[0]}")
 
     print("[4/10] Searching authorized content...")
-    started = time.perf_counter()
-    search_response = search_detailed(embedding, top_k=top_k)
-    stage("CONTENT_SEARCH", started)
+    search_response = execute_stage(
+        "CONTENT_DISCOVERY",
+        lambda: search_detailed(embedding, top_k=top_k),
+    )
     candidates = search_response.results
     if not candidates:
         raise RuntimeError("No candidate posts found")
@@ -98,47 +108,52 @@ def run_pipeline(
     print(f"  Best candidate: {candidate.post_id} ({candidate.similarity_score:.3f})")
 
     print("[6/10] Verifying best match...")
-    started = time.perf_counter()
-    match = verify_match(candidate, query_image_path=image_path, query_metadata=query_metadata, threshold=threshold)
-    stage("MATCH_VERIFICATION", started)
+    match = execute_stage(
+        "MATCH_VERIFICATION",
+        lambda: verify_match(
+            candidate,
+            query_image_path=image_path,
+            query_metadata=query_metadata,
+            threshold=threshold,
+        ),
+    )
     print(f"  Match: {'FOUND' if match.match else 'NOT FOUND'}; confidence={match.confidence:.3f}")
     if not match.match:
         raise RuntimeError(f"No match exceeded the configured threshold ({threshold:.3f})")
 
     print("[7/10] Generating evidence...")
-    started = time.perf_counter()
-    evidence = create_evidence(
-        match,
-        image_hash=_image_hash(candidate.image_path) if candidate.image_path else None,
-        search=search_response,
-        threshold=threshold,
-    )
-    evidence_path = save_evidence(evidence)
-    stage("EVIDENCE_GENERATION", started)
+    def create_and_save_evidence():
+        evidence = create_evidence(
+            match,
+            image_hash=_image_hash(candidate.image_path) if candidate.image_path else None,
+            search=search_response,
+            threshold=threshold,
+            pipeline_id=pipeline_id,
+        )
+        return evidence, save_evidence(evidence)
+
+    evidence, evidence_path = execute_stage("EVIDENCE_GENERATION", create_and_save_evidence)
     print(f"  Evidence: {evidence_path}")
 
     print("[8/10] Hashing evidence...")
-    started = time.perf_counter()
-    evidence_hash = generate_hash(evidence)
-    stage("HASH_GENERATION", started)
+    evidence_hash = execute_stage("HASH_GENERATION", lambda: generate_hash(evidence))
     print(f"  SHA-256: {evidence_hash}")
 
     print("[9/10] Registering evidence on blockchain...")
     if blockchain_register is None:
         from src.blockchain.registry import register_evidence
         blockchain_register = register_evidence
-    started = time.perf_counter()
-    blockchain = blockchain_register(evidence_hash)
-    stage("BLOCKCHAIN_UPLOAD", started)
+    blockchain = execute_stage("BLOCKCHAIN_REGISTRATION", lambda: blockchain_register(evidence_hash))
     print(f"  Transaction hash: {blockchain['transaction_hash']}")
     print(f"  Block number: {blockchain['block_number']}")
     print(f"  Timestamp: {blockchain['timestamp']}")
     print(f"  Contract address: {blockchain['contract_address']}")
 
     print("[10/10] Re-verifying evidence...")
-    started = time.perf_counter()
-    verification = reverify_evidence(evidence, evidence_reader=evidence_reader)
-    stage("RE_VERIFICATION", started)
+    verification = execute_stage(
+        "RE_VERIFICATION",
+        lambda: reverify_evidence(evidence, evidence_reader=evidence_reader),
+    )
     print(f"  {verification['status']}")
     return {
         "pipeline_id": pipeline_id,

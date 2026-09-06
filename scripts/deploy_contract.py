@@ -3,7 +3,13 @@
 import argparse
 import json
 import os
+import sys
+from datetime import datetime, timezone
 from pathlib import Path
+
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
 
 from dotenv import load_dotenv
 from solcx import compile_source, install_solc, set_solc_version
@@ -31,6 +37,7 @@ def deploy(
     if not web3.is_connected():
         raise DeploymentError(f"Unable to connect to EVM RPC: {rpc_url}")
     try:
+        wallet_address = web3.to_checksum_address(wallet_address)
         install_solc(compiler_version)
         set_solc_version(compiler_version)
         compiled = compile_source(source_path.read_text(encoding="utf-8"), output_values=["abi", "bin"])
@@ -48,6 +55,9 @@ def deploy(
         signed = web3.eth.account.sign_transaction(transaction, private_key=private_key)
         tx_hash = web3.eth.send_raw_transaction(signed.raw_transaction)
         receipt = web3.eth.wait_for_transaction_receipt(tx_hash)
+        if int(receipt.status) != 1:
+            raise DeploymentError(f"Contract deployment transaction reverted: {tx_hash.hex()}")
+        block = web3.eth.get_block(receipt.blockNumber)
     except Exception as exc:
         raise DeploymentError(f"Contract deployment failed: {exc}") from exc
 
@@ -59,6 +69,9 @@ def deploy(
         "transactionHash": tx_hash.hex(),
         "blockNumber": receipt.blockNumber,
         "chainId": web3.eth.chain_id,
+        "status": int(receipt.status),
+        "deployer": wallet_address,
+        "timestamp": datetime.fromtimestamp(block.timestamp, timezone.utc).isoformat().replace("+00:00", "Z"),
     }
     output = Path(artifact_path)
     output.parent.mkdir(parents=True, exist_ok=True)
@@ -85,6 +98,8 @@ def main() -> int:
     print(f"Contract address: {result['address']}")
     print(f"Transaction hash: {result['transactionHash']}")
     print(f"Block number: {result['blockNumber']}")
+    print(f"Transaction status: {result['status']}")
+    print(f"Deployer: {result['deployer']}")
     print(f"Artifact: {args.artifact_path}")
     return 0
 

@@ -15,6 +15,7 @@ def _env_bool(name: str, default: bool) -> bool:
 
 
 FACE_MODEL_NAME = os.getenv("FACE_MODEL_NAME", "buffalo_l")
+FACE_CTX_ID = int(os.getenv("FACE_CTX_ID", "-1"))
 FACE_DET_SIZE = int(os.getenv("FACE_DET_SIZE", "640"))
 FACE_MIN_WIDTH = int(os.getenv("FACE_MIN_WIDTH", "160"))
 FACE_MIN_HEIGHT = int(os.getenv("FACE_MIN_HEIGHT", "160"))

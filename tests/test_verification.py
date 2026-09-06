@@ -49,10 +49,11 @@ def test_canonicalization_is_sorted_and_stable():
 
 
 def test_evidence_is_saved_as_utf8_canonical_json(tmp_path):
-    evidence = create_evidence(verified_result(), image_hash="abc123")
+    evidence = create_evidence(verified_result(), image_hash="abc123", pipeline_id="pipeline-id")
     path = save_evidence(evidence, tmp_path / "evidence.json")
     assert path.read_text(encoding="utf-8") == canonicalize_evidence(evidence)
     assert path.is_file()
+    assert evidence["pipeline_id"] == "pipeline-id"
 
 
 def test_tampering_changes_hash():

@@ -43,6 +43,13 @@ def test_invalid_and_small_images_are_rejected(tmp_path):
         validate_image(path)
 
 
+def test_unsupported_image_extension_is_rejected(tmp_path):
+    path = tmp_path / "input.txt"
+    path.write_text("not an image", encoding="utf-8")
+    with pytest.raises(ImageValidationError, match="Unsupported image format"):
+        validate_image(path)
+
+
 def test_detection_returns_landmarks_and_quality(tmp_path, monkeypatch):
     path, image = image_file(tmp_path)
     monkeypatch.setattr(detector, "get_face_app", lambda: type("App", (), {"get": lambda _, img: [FakeFace()]})())

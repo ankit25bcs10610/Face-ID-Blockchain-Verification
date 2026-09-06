@@ -2,8 +2,7 @@
 
 import json
 from pathlib import Path
-
-from web3 import Web3
+from typing import Any
 
 from src.config import settings
 
@@ -12,10 +11,14 @@ class BlockchainError(RuntimeError):
     """Raised when blockchain configuration or RPC operations fail."""
 
 
-def connect_to_blockchain(rpc_url: str | None = None) -> Web3:
+def connect_to_blockchain(rpc_url: str | None = None) -> Any:
     endpoint = rpc_url or settings.BLOCKCHAIN_RPC_URL
     if not endpoint:
         raise BlockchainError("BLOCKCHAIN_RPC_URL is required")
+    try:
+        from web3 import Web3
+    except ImportError as exc:
+        raise BlockchainError("Web3.py is required for blockchain operations") from exc
     web3 = Web3(Web3.HTTPProvider(endpoint))
     if not web3.is_connected():
         raise BlockchainError(f"Unable to connect to blockchain RPC: {endpoint}")
@@ -26,7 +29,7 @@ def connect_to_blockchain(rpc_url: str | None = None) -> Web3:
     return web3
 
 
-def load_registry(web3: Web3, artifact_path: str | Path | None = None, contract_address: str | None = None):
+def load_registry(web3: Any, artifact_path: str | Path | None = None, contract_address: str | None = None):
     path = Path(artifact_path or settings.CONTRACT_ARTIFACT_PATH)
     address = contract_address or settings.CONTRACT_ADDRESS
     if not address:

@@ -89,6 +89,19 @@ def test_invalid_post_is_skipped(tmp_path, monkeypatch):
     result = build_index(posts, tmp_path / "embeddings", tmp_path / "faiss", embedding_fn)
     assert result.indexed_count == 1
     assert result.skipped_count == 1
+    assert result.errors
+
+
+def test_duplicate_post_ids_are_skipped(tmp_path, monkeypatch):
+    posts = tmp_path / "posts"
+    posts.mkdir()
+    make_post(posts, "first", "same-id")
+    make_post(posts, "second", "same-id")
+    monkeypatch.setattr(index_builder, "_faiss_module", lambda: FakeFaiss)
+    result = build_index(posts, tmp_path / "embeddings", tmp_path / "faiss", embedding_fn)
+    assert result.indexed_count == 1
+    assert result.skipped_count == 1
+    assert any("Duplicate post_id" in error for error in result.errors)
 
 
 def test_missing_posts_directory_fails(tmp_path):
@@ -129,3 +142,15 @@ def test_detailed_search_generates_dynamic_audit_metadata(monkeypatch):
     assert response.candidate_count == 1
     assert response.search_id
     assert response.timestamp.endswith("Z")
+
+
+def test_authorized_provider_fetches_manifest_data(tmp_path):
+    index_path = tmp_path / "faces.index"
+    index_path.write_bytes(b"index")
+    manifest_path = tmp_path / "manifest.json"
+    manifest_path.write_text(json.dumps([
+        {"post_id": "post_001", "image_path": "one.jpg", "metadata": {"caption": "one"}},
+    ]), encoding="utf-8")
+    provider = AuthorizedDatasetProvider(index_path, manifest_path)
+    assert provider.fetch_metadata("post_001") == {"caption": "one"}
+    assert provider.fetch_candidates()[0].post_id == "post_001"

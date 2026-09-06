@@ -39,7 +39,10 @@ def get_face_app():
             from insightface.app import FaceAnalysis
 
             _app = FaceAnalysis(name=settings.FACE_MODEL_NAME)
-            _app.prepare(ctx_id=0, det_size=(settings.FACE_DET_SIZE, settings.FACE_DET_SIZE))
+            _app.prepare(
+                ctx_id=settings.FACE_CTX_ID,
+                det_size=(settings.FACE_DET_SIZE, settings.FACE_DET_SIZE),
+            )
         except Exception as exc:
             raise FaceProcessingError(f"Unable to initialize InsightFace: {exc}") from exc
     return _app

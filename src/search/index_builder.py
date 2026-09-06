@@ -63,7 +63,7 @@ def _find_image(post_dir: Path) -> Path:
     return images[0]
 
 
-def discover_posts(posts_dir: str | Path) -> list[tuple[Path, dict, Path]]:
+def discover_posts(posts_dir: str | Path, errors: list[str] | None = None) -> list[tuple[Path, dict, Path]]:
     root = Path(posts_dir)
     if not root.is_dir():
         raise DatasetError(f"Posts directory does not exist: {root}")
@@ -72,7 +72,9 @@ def discover_posts(posts_dir: str | Path) -> list[tuple[Path, dict, Path]]:
         try:
             metadata = _read_metadata(post_dir)
             discovered.append((post_dir, metadata, _find_image(post_dir)))
-        except DatasetError:
+        except DatasetError as exc:
+            if errors is not None:
+                errors.append(f"{post_dir}: {exc}")
             continue
     return discovered
 
@@ -91,13 +93,17 @@ def build_index(
     faiss_dir: str | Path = settings.FAISS_DIR,
     embedding_fn: Callable[[str | Path], np.ndarray] = extract_embedding,
 ) -> IndexBuildResult:
-    posts = discover_posts(posts_dir)
+    errors: list[str] = []
+    posts = discover_posts(posts_dir, errors)
     total_post_dirs = sum(1 for path in Path(posts_dir).iterdir() if path.is_dir())
     vectors: list[np.ndarray] = []
     records: list[IndexedPost] = []
-    errors: list[str] = []
+    seen_post_ids: set[str] = set()
     for _, metadata, image_path in posts:
         try:
+            post_id = metadata["post_id"]
+            if post_id in seen_post_ids:
+                raise DatasetError(f"Duplicate post_id in authorized dataset: {post_id}")
             vector = np.asarray(embedding_fn(image_path), dtype=np.float32).reshape(-1)
             if vector.size != 512 or not np.all(np.isfinite(vector)):
                 raise DatasetError(f"Embedding must be a finite 512-dimensional vector: {image_path}")
@@ -105,7 +111,8 @@ def build_index(
             if norm == 0:
                 raise DatasetError(f"Embedding cannot be zero length: {image_path}")
             vectors.append(vector / norm)
-            records.append(IndexedPost(metadata["post_id"], str(image_path), metadata))
+            records.append(IndexedPost(post_id, str(image_path), metadata))
+            seen_post_ids.add(post_id)
         except Exception as exc:
             errors.append(f"{image_path}: {exc}")
 

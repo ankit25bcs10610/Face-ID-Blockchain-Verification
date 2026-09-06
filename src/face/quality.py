@@ -26,6 +26,11 @@ def load_image(image_path: str | Path) -> np.ndarray:
     path = Path(image_path)
     if not path.is_file():
         raise ImageValidationError(f"Image does not exist: {path}")
+    if path.suffix.lower() not in settings.IMAGE_EXTENSIONS:
+        raise ImageValidationError(
+            f"Unsupported image format: {path.suffix or '<none>'}. "
+            f"Supported formats: {', '.join(settings.IMAGE_EXTENSIONS)}"
+        )
     image = cv2.imread(str(path), cv2.IMREAD_COLOR)
     if image is None:
         raise ImageValidationError(f"Unable to decode image: {path}")
