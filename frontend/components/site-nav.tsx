@@ -77,9 +77,9 @@ function TraceLogo() {
     <svg className="trace-logo" viewBox="0 0 64 64" role="img" aria-label="ORYNEX AI identity mark">
       <defs>
         <linearGradient id="trace-gold" x1="8" y1="7" x2="55" y2="58" gradientUnits="userSpaceOnUse">
-          <stop stopColor="#fff0b0" />
-          <stop offset="0.32" stopColor="#f7bd43" />
-          <stop offset="1" stopColor="#b56c13" />
+          <stop stopColor="#bbf7d0" />
+          <stop offset="0.32" stopColor="#4ade80" />
+          <stop offset="1" stopColor="#15803d" />
         </linearGradient>
       </defs>
       <path className="trace-shield outer" d="M32 5.5 51.5 16v14.2c0 12.5-7.2 22-19.5 28.3C19.7 52.2 12.5 42.7 12.5 30.2V16L32 5.5Z" />

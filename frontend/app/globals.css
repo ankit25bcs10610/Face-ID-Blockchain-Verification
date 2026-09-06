@@ -1,50 +1,50 @@
-@import url('https://fonts.googleapis.com/css2?family=Spectral:ital,wght@0,400;0,500;0,600;0,700;1,400&family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;600&family=Fira+Sans:wght@400;500;600;700&display=swap');
 
 /* ---------- Design tokens ---------- */
 :root {
-  --bg: #0a0a08;
-  --bg-raised: #121110;
-  --bg-sunken: #060605;
-  --ink: #f2ede0;
-  --ink-soft: #cfc7b4;
-  --muted: #948b78;
-  --line: rgba(242, 237, 224, 0.12);
-  --line-strong: rgba(242, 237, 224, 0.24);
-  --gold: #d9a94e;
-  --gold-strong: #eec272;
-  --gold-deep: #a9791f;
-  --gold-wash: rgba(217, 169, 78, 0.12);
-  --verified: #7bb489;
-  --verified-wash: rgba(123, 180, 137, 0.14);
-  --danger: #c97b6c;
-  --danger-wash: rgba(201, 123, 108, 0.14);
+  --bg: #0f172a;
+  --bg-raised: #1b2336;
+  --bg-sunken: #0b1220;
+  --ink: #f8fafc;
+  --ink-soft: #d7deea;
+  --muted: #94a3b8;
+  --line: rgba(148, 163, 184, 0.16);
+  --line-strong: rgba(148, 163, 184, 0.3);
+  --gold: #22c55e;
+  --gold-strong: #4ade80;
+  --gold-deep: #16a34a;
+  --gold-wash: rgba(34, 197, 94, 0.12);
+  --verified: #4ade80;
+  --verified-wash: rgba(34, 197, 94, 0.14);
+  --danger: #f87171;
+  --danger-wash: rgba(248, 113, 113, 0.14);
   --shadow: 0 30px 80px rgba(0, 0, 0, 0.45);
 
-  --font-display: "Spectral", "Iowan Old Style", Georgia, serif;
-  --font-sans: "IBM Plex Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-  --font-mono: "IBM Plex Mono", "SFMono-Regular", Consolas, monospace;
+  --font-display: "Fira Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --font-sans: "Fira Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --font-mono: "Fira Code", "SFMono-Regular", Consolas, monospace;
 
   --edge: clamp(24px, 4.4vw, 72px);
   color-scheme: dark;
 }
 
 html[data-theme="light"] {
-  --bg: #fbf9f4;
+  --bg: #f8fafc;
   --bg-raised: #ffffff;
-  --bg-sunken: #f2efe6;
-  --ink: #211d13;
-  --ink-soft: #4a4230;
-  --muted: #7c735d;
-  --line: rgba(33, 29, 19, 0.12);
-  --line-strong: rgba(33, 29, 19, 0.24);
-  --gold: #a3781e;
-  --gold-strong: #8a6418;
-  --gold-deep: #6f4f12;
-  --gold-wash: rgba(163, 120, 30, 0.09);
-  --verified: #3d7a4d;
-  --verified-wash: rgba(61, 122, 77, 0.1);
-  --danger: #a3402f;
-  --danger-wash: rgba(163, 64, 47, 0.1);
+  --bg-sunken: #eef2f7;
+  --ink: #0f172a;
+  --ink-soft: #334155;
+  --muted: #64748b;
+  --line: rgba(15, 23, 42, 0.12);
+  --line-strong: rgba(15, 23, 42, 0.24);
+  --gold: #16a34a;
+  --gold-strong: #15803d;
+  --gold-deep: #166534;
+  --gold-wash: rgba(22, 163, 74, 0.09);
+  --verified: #15803d;
+  --verified-wash: rgba(22, 163, 74, 0.1);
+  --danger: #dc2626;
+  --danger-wash: rgba(220, 38, 38, 0.1);
   --shadow: 0 24px 60px rgba(33, 29, 19, 0.1);
   color-scheme: light;
 }
@@ -65,6 +65,23 @@ a { color: inherit; }
 ::selection { background: var(--gold-wash); color: var(--ink); }
 :focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
 code, pre { font-family: var(--font-mono); }
+.skip-link {
+  position: fixed;
+  top: 12px;
+  left: 12px;
+  z-index: 100;
+  transform: translateY(-160%);
+  padding: 10px 14px;
+  border-radius: 10px;
+  color: var(--bg);
+  background: var(--gold-strong);
+  font-size: 13px;
+  font-weight: 600;
+  text-decoration: none;
+  transition: transform .18s ease;
+}
+.skip-link:focus { transform: translateY(0); }
+main:focus { outline: none; }
 
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: 0.001ms !important; transition-duration: 0.001ms !important; }
@@ -98,13 +115,13 @@ code, pre { font-family: var(--font-mono); }
 .seal {
   width: 52px; height: 52px;
   border-radius: 15px;
-  border: 1px solid rgba(225, 166, 53, .55);
+  border: 1px solid rgba(74, 222, 128, .55);
   display: grid;
   place-items: center;
   color: var(--gold);
   flex: none;
-  background: radial-gradient(circle at 35% 20%, rgba(255, 198, 70, .2), transparent 55%), #0c0c0c;
-  box-shadow: inset 0 0 0 3px rgba(255, 196, 71, 0.06), 0 0 18px rgba(220, 157, 38, 0.14);
+  background: radial-gradient(circle at 35% 20%, rgba(74, 222, 128, .2), transparent 55%), #111827;
+  box-shadow: inset 0 0 0 3px rgba(74, 222, 128, 0.06), 0 0 18px rgba(34, 197, 94, 0.14);
 }
 .trace-logo { width: 46px; height: 46px; overflow: visible; }
 .trace-shield { fill: none; stroke: url(#trace-gold); stroke-linejoin: round; }
@@ -113,18 +130,18 @@ code, pre { font-family: var(--font-mono); }
 .trace-core { fill: none; stroke: url(#trace-gold); stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
 .trace-c { fill: none; stroke: #f4bd48; stroke-width: 1.7; stroke-linecap: round; }
 .trace-orbit { fill: none; stroke: url(#trace-gold); stroke-width: 1.5; stroke-linecap: round; }
-.trace-node { fill: #f4bd48; stroke: #17110a; stroke-width: 1.5; }
-.trace-spark { fill: none; stroke: #f7c75b; stroke-width: 1.15; stroke-linecap: round; }
+.trace-node { fill: #4ade80; stroke: #0f172a; stroke-width: 1.5; }
+.trace-spark { fill: none; stroke: #86efac; stroke-width: 1.15; stroke-linecap: round; }
 .brandblock { display: flex; align-items: center; gap: 12px; }
 .brandblock .name {
   font-family: var(--font-display);
   font-size: 23px;
   letter-spacing: 0.015em;
   font-weight: 650;
-  color: #f4f0e8;
+  color: var(--ink);
 }
 .brandblock .name span { color: var(--gold); }
-.brandblock .tag { display: block; color: #c7c4bd; font-size: 10px; letter-spacing: 0.21em; margin-top: 3px; }
+.brandblock .tag { display: block; color: var(--muted); font-size: 10px; letter-spacing: 0.21em; margin-top: 3px; }
 .brandblock .tag i { color: var(--gold); font-style: normal; padding: 0 4px; }
 .site-nav nav { display: flex; gap: 26px; margin-left: 20px; }
 .site-nav nav a {
@@ -816,6 +833,20 @@ body {
 .badge { padding: 7px 12px; letter-spacing: .04em; }
 
 .error-line, .notice-line { border-radius: var(--radius-sm); }
+.error-line { align-items: center; }
+.inline-retry {
+  min-width: 56px;
+  min-height: 32px;
+  margin-left: auto;
+  padding: 6px 10px;
+  border: 1px solid currentColor;
+  border-radius: 8px;
+  color: inherit;
+  font-size: 12px;
+  font-weight: 600;
+}
+.inline-retry:hover:not(:disabled) { background: color-mix(in srgb, currentColor 12%, transparent); }
+.inline-retry:disabled { opacity: .45; cursor: not-allowed; }
 .hash-block { border-radius: 10px; }
 
 @media (max-width: 760px) {

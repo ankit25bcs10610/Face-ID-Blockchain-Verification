@@ -301,7 +301,9 @@ export default function Dashboard() {
   };
 
   return (
-    <main>
+    <>
+      <a className="skip-link" href="#main-content">Skip to workspace</a>
+      <main id="main-content" tabIndex={-1}>
       <SiteNav />
 
       <section className="hero">
@@ -385,9 +387,15 @@ export default function Dashboard() {
           <button className="run-btn" disabled={!file || running} onClick={run}>
             {running ? <><LoaderCircle className="spin" size={16} /> Processing pipeline…</> : <><Activity size={16} /> Run ORYNEX AI pipeline</>}
           </button>
-          {error && <div className="error-line"><CircleAlert size={15} /><span>{error}</span></div>}
+          {error && (
+            <div className="error-line" role="alert">
+              <CircleAlert size={15} />
+              <span>{error}</span>
+              <button className="inline-retry" onClick={run} disabled={!file || running}>Retry</button>
+            </div>
+          )}
           {notice && (
-            <div className="notice-line">
+            <div className="notice-line" role="status" aria-live="polite">
               <Search size={15} />
               <div>
                 <strong>No public match found</strong>
@@ -409,7 +417,7 @@ export default function Dashboard() {
           <p className="col-note">
             Each step runs in sequence on the backend and reports here as it finishes.
           </p>
-          <div className="trace-list">
+          <div className="trace-list" role="status" aria-live="polite" aria-label="Pipeline progress">
             {stages.map((stage, index) => {
               const meta = STAGE_META[index];
               const phase = PHASES.find((entry) => entry.from === index);
@@ -566,6 +574,7 @@ export default function Dashboard() {
         <span>No fabricated runtime data</span>
         <span>v1.0 · local core</span>
       </footer>
-    </main>
+      </main>
+    </>
   );
 }
