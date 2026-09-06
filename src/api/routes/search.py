@@ -5,7 +5,8 @@ import numpy as np
 from pydantic import BaseModel, Field
 
 from src.api.schemas import SearchResponse
-from src.search.orchestrator import search_detailed
+from src.api.errors import ApiFailure
+from src.search.orchestrator import SearchError, search_detailed
 
 router = APIRouter(tags=["search"])
 
@@ -17,5 +18,8 @@ class SearchRequest(BaseModel):
 
 @router.post("/search", response_model=SearchResponse, summary="Search the authorized FAISS dataset")
 def search(request: SearchRequest) -> SearchResponse:
-    response = search_detailed(np.asarray(request.embedding, dtype=np.float32), top_k=request.top_k)
+    try:
+        response = search_detailed(np.asarray(request.embedding, dtype=np.float32), top_k=request.top_k)
+    except (SearchError, ValueError) as exc:
+        raise ApiFailure("SEARCH_UNAVAILABLE", str(exc), 503) from exc
     return SearchResponse(**response.as_dict())

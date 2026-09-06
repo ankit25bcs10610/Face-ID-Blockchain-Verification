@@ -1,6 +1,7 @@
 """HTTP-level tests for the FastAPI adapter using controlled service boundaries."""
 
 from fastapi.testclient import TestClient
+import pytest
 
 from src.api.main import app
 
@@ -28,6 +29,23 @@ def test_pipeline_requires_an_image():
     response = client.post("/pipeline/run")
     assert response.status_code == 400
     assert response.json()["error"]["code"] == "INVALID_REQUEST"
+
+
+def test_search_reports_missing_index_as_dependency_error():
+    from src.api.routes import search
+    from src.search.orchestrator import SearchError
+
+    def unavailable(*_args, **_kwargs):
+        raise SearchError("FAISS index does not exist")
+
+    monkeypatch = pytest.MonkeyPatch()
+    monkeypatch.setattr(search, "search_detailed", unavailable)
+    try:
+        response = client.post("/search", json={"embedding": [0.0] * 512, "top_k": 5})
+    finally:
+        monkeypatch.undo()
+    assert response.status_code == 503
+    assert response.json()["error"]["code"] == "SEARCH_UNAVAILABLE"
 
 
 def test_pipeline_route_returns_service_result(monkeypatch):
