@@ -10,7 +10,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from src.api.errors import ApiFailure
-from src.api.routes import face, health, pipeline, search, verification
+from src.api.routes import evidence, face, health, pipeline, search, verification
 from src.api.schemas import ErrorResponse
 from src.config import settings
 
@@ -26,6 +26,7 @@ if settings.ALLOWED_ORIGINS:
     app.add_middleware(CORSMiddleware, allow_origins=list(settings.ALLOWED_ORIGINS), allow_credentials=True, allow_methods=["GET", "POST"], allow_headers=["*"])
 
 app.include_router(health.router)
+app.include_router(evidence.router)
 app.include_router(face.router)
 app.include_router(pipeline.router)
 app.include_router(search.router)

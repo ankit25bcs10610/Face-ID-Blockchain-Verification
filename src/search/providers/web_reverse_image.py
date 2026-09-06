@@ -1,15 +1,18 @@
-"""Live reverse-image-search provider backed by SerpAPI's Google Lens (visual_matches) engine.
+"""Live reverse-image-search provider backed by SerpAPI's Google Lens engine.
 
 Unlike ``AuthorizedDatasetProvider`` (which only searches a local, curated
 folder) this provider performs a genuine runtime search of the public web: it
-temporarily hosts the query image, asks SerpAPI to find pages where a
+uploads the query image to SerpAPI, asks Google Lens for pages where a
 visually similar image appears, downloads each candidate image, and
 re-verifies it with our own ArcFace embedding before treating it as a match
 candidate. Nothing here is hardcoded or pre-selected.
+
+The query image is sent only to SerpAPI (which discards it after ten
+minutes); it is never published to a public URL of our own.
 """
 
-import base64
-import subprocess
+import io
+import time
 import uuid
 from pathlib import Path
 from urllib.parse import urlparse
@@ -21,85 +24,85 @@ from src.config import settings
 from src.search.candidate_ranker import CandidatePost
 from src.search.providers.base import SearchProvider
 
+# SerpApi's image upload endpoint rejects anything larger than 500 KB.
+_UPLOAD_LIMIT_BYTES = 500 * 1024
+
 
 class WebSearchError(ValueError):
     """Raised when the live web search cannot be completed."""
 
 
-def _github_token() -> str:
-    if settings.GITHUB_TOKEN:
-        return settings.GITHUB_TOKEN
-    try:
-        result = subprocess.run(
-            ["gh", "auth", "token"], capture_output=True, text=True, timeout=10, check=True
-        )
-    except (OSError, subprocess.SubprocessError) as exc:
-        raise WebSearchError(
-            "No GITHUB_TOKEN configured and `gh auth token` is unavailable"
-        ) from exc
-    token = result.stdout.strip()
-    if not token:
-        raise WebSearchError("`gh auth token` returned an empty token")
-    return token
+def _prepare_upload_bytes(image_path: Path) -> bytes:
+    """Return image bytes that fit inside SerpApi's upload size limit.
 
-
-def _host_image_publicly(image_path: Path) -> str:
-    """Push the query image to a public GitHub repo so SerpAPI/Google can fetch it.
-
-    Google's reverse-image-by-URL backends will only fetch images from
-    domains they already trust and crawl; anonymous throwaway file hosts
-    (tested: catbox.moe, litterbox) reliably return zero results even for
-    images that DO have real matches elsewhere on the web. raw content on
-    GitHub (raw.githubusercontent.com) is fetched successfully even seconds
-    after upload, so this pushes the query image into a dedicated public
-    repository (configured via GITHUB_HOST_OWNER/GITHUB_HOST_REPO) via the
-    GitHub Contents API.
-
-    Note: the pushed image becomes a public, world-readable file in that
-    repository. It is not automatically deleted. Only use this with images
-    you're comfortable being publicly hosted.
+    Only the reverse-image lookup uses this copy. Face matching still runs on
+    the original file, so downscaling here does not affect match accuracy.
     """
-    owner, repo, branch = settings.GITHUB_HOST_OWNER, settings.GITHUB_HOST_REPO, settings.GITHUB_HOST_BRANCH
-    if not owner:
-        raise WebSearchError("GITHUB_HOST_OWNER is not configured")
-    token = _github_token()
-    suffix = Path(image_path).suffix or ".jpg"
-    remote_path = f"queries/{uuid.uuid4().hex}{suffix}"
+    raw = image_path.read_bytes()
+    if len(raw) <= _UPLOAD_LIMIT_BYTES:
+        return raw
     try:
-        content_b64 = base64.b64encode(Path(image_path).read_bytes()).decode("ascii")
-        response = requests.put(
-            f"https://api.github.com/repos/{owner}/{repo}/contents/{remote_path}",
-            headers={"Authorization": f"token {token}", "Accept": "application/vnd.github+json"},
-            json={"message": "TraceChain AI search query image", "content": content_b64, "branch": branch},
-            timeout=30,
+        from PIL import Image
+
+        image = Image.open(io.BytesIO(raw))
+        image = image.convert("RGB")
+        for max_edge, quality in ((1600, 85), (1280, 80), (1024, 75), (800, 70)):
+            resized = image.copy()
+            resized.thumbnail((max_edge, max_edge))
+            buffer = io.BytesIO()
+            resized.save(buffer, format="JPEG", quality=quality, optimize=True)
+            if buffer.tell() <= _UPLOAD_LIMIT_BYTES:
+                return buffer.getvalue()
+    except Exception as exc:
+        raise WebSearchError(f"Unable to prepare the query image for upload: {exc}") from exc
+    raise WebSearchError("The query image could not be compressed below SerpApi's 500 KB upload limit")
+
+
+def _upload_to_serpapi(image_path: Path, api_key: str) -> str:
+    """Upload the query image to SerpApi and return its short-lived image id."""
+    payload = _prepare_upload_bytes(Path(image_path))
+    try:
+        response = requests.post(
+            settings.SERPAPI_UPLOAD_ENDPOINT,
+            files={"image": (Path(image_path).name, payload)},
+            data={"api_key": api_key},
+            timeout=45,
         )
         response.raise_for_status()
-        payload = response.json()
-    except (OSError, requests.RequestException, ValueError) as exc:
-        raise WebSearchError(f"Unable to publicly host the query image on GitHub: {exc}") from exc
-    url = payload.get("content", {}).get("download_url")
-    if not url:
-        raise WebSearchError(f"GitHub upload did not return a usable URL: {payload!r}")
-    return url
+        body = response.json()
+    except (requests.RequestException, ValueError) as exc:
+        raise WebSearchError(f"Unable to upload the query image to SerpApi: {exc}") from exc
+    image_id = body.get("image_id")
+    if not image_id:
+        raise WebSearchError(f"SerpApi upload did not return an image id: {body!r}")
+    return str(image_id)
 
 
-def _serpapi_reverse_image_search(image_url: str, api_key: str) -> list[dict]:
-    # engine=google_reverse_image only exposes tiny (~90px) gstatic cache
-    # thumbnails per result, too small for reliable face re-detection.
-    # google_lens with type=visual_matches exposes the actual full-resolution
-    # source image URL for each match, so that's used instead.
+def _serpapi_visual_matches(image_id: str, api_key: str) -> list[dict]:
+    """Return Google Lens visual matches for an uploaded image id."""
     try:
         response = requests.get(
             settings.SERPAPI_ENDPOINT,
-            params={"engine": "google_lens", "url": image_url, "type": "visual_matches", "api_key": api_key},
-            timeout=30,
+            params={
+                "engine": "google_lens",
+                "image_id": image_id,
+                "type": "visual_matches",
+                "api_key": api_key,
+            },
+            timeout=45,
         )
         response.raise_for_status()
         payload = response.json()
     except (requests.RequestException, ValueError) as exc:
-        raise WebSearchError(f"SerpAPI reverse image search failed: {exc}") from exc
-    if payload.get("error"):
-        raise WebSearchError(f"SerpAPI reverse image search failed: {payload['error']}")
+        raise WebSearchError(f"SerpApi reverse image search failed: {exc}") from exc
+    error = payload.get("error")
+    if error:
+        # "hasn't returned any results" is a legitimate empty result, not a
+        # service failure: the query image simply has no visual match on the
+        # public web. Every other error is a real failure.
+        if "hasn't returned any results" in error:
+            return []
+        raise WebSearchError(f"SerpApi reverse image search failed: {error}")
     return payload.get("visual_matches", []) or []
 
 
@@ -113,7 +116,7 @@ def _platform_from_url(url: str) -> str:
 
 def _download_image(url: str, destination: Path) -> bool:
     try:
-        response = requests.get(url, timeout=20, stream=True)
+        response = requests.get(url, timeout=20)
         response.raise_for_status()
         destination.write_bytes(response.content)
         return True
@@ -122,7 +125,7 @@ def _download_image(url: str, destination: Path) -> bool:
 
 
 class WebReverseImageProvider(SearchProvider):
-    """Search the live web via SerpAPI and re-verify hits with our own face model."""
+    """Search the live web via SerpApi and re-verify hits with our own face model."""
 
     name = "web_reverse_image"
 
@@ -133,8 +136,24 @@ class WebReverseImageProvider(SearchProvider):
     def validate_source(self) -> None:
         if not self.api_key:
             raise WebSearchError("SERPAPI_API_KEY is not configured")
-        if not settings.GITHUB_HOST_OWNER:
-            raise WebSearchError("GITHUB_HOST_OWNER is not configured")
+
+    def _discover(self, image_path: Path) -> list[dict]:
+        """Upload and search, retrying transient failures and empty responses."""
+        last_error: WebSearchError | None = None
+        for attempt in range(settings.WEB_SEARCH_MAX_ATTEMPTS):
+            if attempt:
+                time.sleep(1.5 * attempt)
+            try:
+                image_id = _upload_to_serpapi(image_path, self.api_key)
+                results = _serpapi_visual_matches(image_id, self.api_key)
+            except WebSearchError as exc:
+                last_error = exc
+                continue
+            if results:
+                return results
+        if last_error is not None:
+            raise last_error
+        return []
 
     def search(
         self, embedding: np.ndarray, top_k: int, image_path: str | Path | None = None
@@ -148,23 +167,7 @@ class WebReverseImageProvider(SearchProvider):
         query_vector = np.asarray(embedding, dtype=np.float32).reshape(-1)
         query_vector = query_vector / (np.linalg.norm(query_vector) or 1.0)
 
-        raw_results: list[dict] = []
-        last_error: WebSearchError | None = None
-        for _attempt in range(settings.WEB_SEARCH_MAX_ATTEMPTS):
-            # A fresh upload path each attempt: Google's fetch-and-match step is
-            # empirically flaky per-URL (a brand-new URL can succeed or come back
-            # empty with no discernible reason), so retrying with a new URL gives
-            # each attempt an independent chance rather than repeating a query
-            # Google has already cached as empty.
-            image_url = _host_image_publicly(Path(image_path))
-            try:
-                raw_results = _serpapi_reverse_image_search(image_url, self.api_key)
-                break
-            except WebSearchError as exc:
-                last_error = exc
-        else:
-            if last_error is not None:
-                raise last_error
+        raw_results = self._discover(Path(image_path))
 
         self.cache_dir.mkdir(parents=True, exist_ok=True)
         search_batch = uuid.uuid4().hex[:8]

@@ -100,7 +100,11 @@ def run_pipeline(
     )
     candidates = search_response.results
     if not candidates:
-        raise RuntimeError("No candidate posts found")
+        raise RuntimeError(
+            "No candidate posts found. Reverse image search only finds images that are "
+            "already published publicly on the web, so a private photo with no public "
+            "presence will return nothing."
+        )
     print(f"  Candidates found: {len(candidates)}")
 
     print("[5/10] Ranking candidates...")

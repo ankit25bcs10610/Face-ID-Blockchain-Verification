@@ -1,109 +1,89 @@
 # TraceChain AI
 
-> **From authorized face scans to verifiable, tamper-evident evidence.**
+> **From a face scan to a verifiable, tamper-evident record.**
 
 [![Python](https://img.shields.io/badge/Python-3.10%2B-3776AB?logo=python&logoColor=white)](https://www.python.org/)
 [![FastAPI](https://img.shields.io/badge/API-FastAPI-009688?logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com/)
-[![Next.js](https://img.shields.io/badge/UI-Next.js-000000?logo=next.js&logoColor=white)](https://nextjs.org/)
-[![Tests](https://img.shields.io/badge/tests-35%20passing-2ea44f)](#testing)
+[![Next.js](https://img.shields.io/badge/UI-Next.js%2015-000000?logo=next.js&logoColor=white)](https://nextjs.org/)
+[![Solidity](https://img.shields.io/badge/Contract-Solidity%200.8.20-363636?logo=solidity&logoColor=white)](https://soliditylang.org/)
+[![Tests](https://img.shields.io/badge/tests-37%20passing-2ea44f)](#testing)
 
-TraceChain AI is an end-to-end, consent-first evidence pipeline for authorized visual content. It combines face processing, vector retrieval, multi-signal verification, deterministic evidence hashing, and Ethereum-compatible registry anchoring behind a CLI, REST API, and operator console.
+TraceChain AI takes a face image, **searches the live public web** for content showing the same
+person, **independently re-verifies** each hit with its own face-recognition model, then **seals the
+result on an Ethereum-compatible chain** so it can be re-checked later and proven untampered.
 
-> **Important:** This project is a technical demonstration, not an identity service or a substitute for legal, forensic, or high-impact decision-making review.
+Every number in the interface comes from an actual run. There is no demo mode, no seeded results,
+and no fabricated data anywhere in the pipeline.
 
 ```text
-Authorized face image
-  -> validation and face processing
-  -> authorized dataset search
-  -> FAISS similarity ranking
-  -> multi-signal match verification
-  -> canonical evidence JSON
-  -> SHA-256 fingerprint
-  -> EVM smart-contract registration
-  -> independent re-verification
+Face image
+  → validation + quality checks
+  → InsightFace detection (SCRFD) + 512-d ArcFace embedding
+  → live reverse-image search on the public web (Google Lens via SerpApi)
+  → download each candidate + re-embed it with our own model
+  → multi-signal match scoring (face + perceptual image + metadata)
+  → canonical evidence JSON → SHA-256 fingerprint
+  → registered in an on-chain evidence registry
+  → independent re-verification (local hash vs on-chain hash)
 ```
+
+---
 
 ## Contents
 
-- [Privacy and Authorization](#privacy-and-authorization)
-- [Architecture](#architecture)
-- [Workflow](#workflow)
-- [Technology Stack](#technology-stack)
-- [Installation](#installation)
+- [How it meets the brief](#how-it-meets-the-brief)
+- [What makes the search genuine](#what-makes-the-search-genuine)
+- [Quick start](#quick-start)
 - [Configuration](#configuration)
-- [Dataset and FAISS Index](#authorized-dataset-and-faiss-index)
-- [Blockchain Deployment](#blockchain-deployment)
-- [Frontend](#frontend)
-- [FastAPI Backend](#fastapi-backend)
-- [Running the Pipeline](#running-the-pipeline)
-- [Evidence and Tampering](#evidence-and-tampering)
+- [Blockchain](#blockchain)
+- [Interface](#interface)
+- [API reference](#api-reference)
+- [Evidence and tamper detection](#evidence-and-tamper-detection)
 - [Testing](#testing)
-- [Security and Limitations](#security-and-limitations)
+- [Privacy and authorization](#privacy-and-authorization)
+- [Known limitations](#known-limitations)
 
-## Privacy and Authorization
+---
 
-TraceChain AI does **not** identify unknown people across arbitrary public social-media accounts. Its default `AuthorizedDatasetProvider` searches only the configured local `data/posts/` corpus.
+## How it meets the brief
 
-Images and metadata added to that corpus must be user-owned, explicitly consented, or otherwise authorized for this demonstration. Any future provider must maintain the same consent, platform-permission, and legal-compliance boundary. A high similarity score is not legal identity proof and must not be used as a sole decision in a high-impact setting.
-
-## Architecture
-
-![TraceChain AI architecture: authorized face processing, FAISS search, verification, evidence hashing, blockchain registration, and re-verification](assets/tracechain-architecture.png)
-
-The diagram summarizes the implemented system. The API and frontend are interaction layers; the business logic remains in the reusable Python core. The optional reverse-image-search branch shown in the diagram is intentionally not enabled by the default provider. Searches are restricted to the configured authorized local dataset.
-
-## Workflow
-
-1. **Validate and process the input.** The image must decode as color, satisfy configurable dimensions and quality limits, and contain one face by default. InsightFace returns landmarks, detection confidence, and a normalized 512-dimensional embedding.
-2. **Index authorized content.** The index builder processes permitted post images, creates real embeddings, normalizes them, and persists a FAISS `IndexFlatIP` index, embedding matrix, manifest, and index metadata.
-3. **Search dynamically.** The query embedding is submitted to the configured provider. FAISS performs nearest-neighbor retrieval at runtime; results are mapped back to persisted post metadata and ranked by actual similarity.
-4. **Verify the best candidate.** Face-vector similarity is combined with perceptual image similarity when both images exist and metadata consistency when query metadata is supplied. Only available signals participate, and their configured weights are normalized.
-5. **Generate evidence.** A successful match produces a JSON-safe record containing generated IDs, source data, calculated scores, fingerprints, and timestamps.
-6. **Anchor the fingerprint.** Canonical JSON is serialized with sorted keys, stable separators, UTF-8 encoding, and SHA-256. The 32-byte hash is registered through the Solidity contract.
-7. **Re-verify later.** The evidence is canonicalized and hashed again, the on-chain record is fetched, and the hashes are compared. A changed evidence field produces a different hash and `TAMPER DETECTED`.
-
-## Technology Stack
-
-| Area | Components |
+| Requirement | How it is implemented |
 | --- | --- |
-| Runtime | Python 3.10+ |
-| Vision | InsightFace, ArcFace, OpenCV, Pillow, NumPy |
-| Search | FAISS normalized inner-product index |
-| Integrity | Canonical JSON, UTF-8, SHA-256, ImageHash |
-| Blockchain | Solidity, Web3.py, py-solc-x, local EVM or testnet |
-| Testing | Pytest |
+| **Face identification** | InsightFace `buffalo_l`: SCRFD detection with quality and confidence gates, then a normalized 512-dimensional ArcFace embedding. |
+| **Web / social-media search** | A live Google Lens reverse-image search through SerpApi at runtime. Results are whatever the public web returns for that image — never a fixed list. |
+| **Blockchain verification** | `EvidenceRegistry.sol` stores the SHA-256 fingerprint of the canonical evidence. Re-verification reads the record back and compares hashes, so any edit produces `TAMPER DETECTED`. |
+| **Genuine, not hardcoded** | The search provider has no local corpus. Every candidate is fetched from the live web, downloaded, and re-scored with our own model before it can become a match. |
 
-## Repository Layout
+---
 
-```text
-contracts/
-  EvidenceRegistry.sol          # On-chain evidence fingerprint registry
-data/
-  posts/                        # Authorized post directories
-  embeddings/                   # Generated normalized embedding matrix
-  faiss/                        # FAISS index, manifest, and metadata
-  evidence/                     # Generated canonical evidence files
-demo/
-  demo_pipeline.py              # Pipeline entry-point wrapper
-  tamper_demo.py                # Re-verification/tampering CLI
-scripts/
-  build_index.py                # Authorized dataset index builder
-  deploy_contract.py            # Contract compile and deployment script
-src/
-  face/                         # Validation, detection, alignment, encoding
-  search/                       # Providers, indexing, FAISS, ranking
-  verification/                 # Match scoring, evidence, hashing
-  blockchain/                   # RPC client, registry, re-verification
-  config/                       # Environment-backed settings
-  api/                          # FastAPI routes, schemas, errors, middleware
-src/services/
-  pipeline_service.py           # Secure API adapter around the core pipeline
-src/main.py                     # End-to-end command-line pipeline
-tests/                          # Unit and injected-boundary integration tests
-frontend/                       # Next.js operator console
-```
+## What makes the search genuine
 
-## Installation
+The weak point in a project like this is faking the "search" step. TraceChain avoids that in three ways.
+
+**1. The search is a live external query.** The query image is uploaded to SerpApi, which runs a real
+Google Lens visual-match search. Nothing is cached or pre-selected; two runs of the same image can
+legitimately return different sources as the web changes.
+
+**2. Google's ranking is not trusted as the answer.** Lens only proposes candidates. TraceChain then
+downloads each candidate image, runs the *same* detection and ArcFace embedding used on the query,
+and computes a real cosine similarity. A visually similar page with no detectable face is discarded.
+The similarity you see is computed locally, not reported by Google.
+
+**3. The match must clear a configured threshold.** Face similarity is combined with perceptual image
+similarity (pHash) and, when supplied, metadata consistency. Only available signals contribute and
+their weights are renormalized. Below `MATCH_THRESHOLD`, the run reports no match rather than
+inventing one.
+
+> **The honest constraint:** reverse image search can only find images that are *already published
+> and indexed on the public web*. A private photo from your phone has nothing to match against and
+> will correctly return no results. This is a property of reverse image search, not a defect — the
+> interface says so explicitly when it happens.
+
+---
+
+## Quick start
+
+### 1. Install
 
 ```bash
 git clone https://github.com/ankit25bcs10610/Face-ID-Blockchain-Verification.git
@@ -115,264 +95,199 @@ pip install -r requirements.txt
 cp .env.example .env
 ```
 
-InsightFace may download model assets when first initialized. Real inference also needs a compatible ONNX Runtime environment; install the platform-appropriate runtime if InsightFace reports it missing.
+InsightFace downloads its `buffalo_l` model pack (~280 MB) on first use. Run any pipeline command
+once before a demo so this happens ahead of time rather than mid-run.
 
-## Configuration
+### 2. Get a SerpApi key
 
-All runtime behavior is environment-backed. Copy `.env.example` to `.env`, then set only the values appropriate for your chosen environment.
-
-| Variable group | Purpose |
-| --- | --- |
-| `FACE_*` | InsightFace model choice, detector size, image limits, quality, and face confidence. |
-| `POSTS_DIR`, `EMBEDDINGS_DIR`, `FAISS_DIR` | Authorized corpus and generated artifact locations. |
-| `TOP_K` | Number of nearest-neighbor candidates returned. |
-| `MATCH_THRESHOLD`, `*_WEIGHT` | Match decision and multi-signal scoring. |
-| `EVIDENCE_DIR`, `EVIDENCE_VERSION` | Evidence persistence configuration. |
-| `BLOCKCHAIN_RPC_URL` | Local or testnet Ethereum-compatible RPC endpoint. |
-| `PRIVATE_KEY`, `WALLET_ADDRESS` | Signing credentials; never commit these. |
-| `CONTRACT_ADDRESS`, `CONTRACT_ARTIFACT_PATH` | Deployed registry configuration. |
-| `CHAIN_ID` | Optional expected chain ID; `0` disables enforcement. |
-| `BLOCKCHAIN_MODE` | Validated as `local` or `rpc`. |
-
-The application validates top-k, thresholds, weights, detector dimensions, confidence limits, and blockchain mode before a run.
-
-## Authorized Dataset and FAISS Index
-
-The default search provider is a local, consented dataset. The frontend status `FAISS INDEX UNAVAILABLE` means that the backend cannot find a generated index yet; it does not indicate a broken FAISS installation.
-
-### Add authorized posts
-
-Each post belongs in its own directory and must contain one supported image plus `metadata.json`:
-
-```text
-data/posts/
-  post_001/
-    image.jpg
-    metadata.json
-```
-
-`metadata.json` requires a unique, non-empty `post_id`. These fields are recommended because they are preserved in evidence and can participate in metadata verification:
-
-```json
-{
-  "post_id": "post_001",
-  "platform": "authorized_demo",
-  "post_url": "https://example.invalid/post_001",
-  "caption": "Authorized demonstration content",
-  "timestamp": "2026-09-06T10:00:00Z"
-}
-```
-
-The example describes the file shape only. The pipeline does not insert sample posts, generate placeholder embeddings, or preselect a winner. Add only content that is owned, consented, or otherwise authorized for processing.
-
-### Build the index
-
-From the repository root, run:
-
-```bash
-python3 scripts/build_index.py
-```
-
-The builder validates each image, detects a face with InsightFace, generates a normalized 512-dimensional embedding, and performs a real FAISS `IndexFlatIP` build. A successful run creates:
-
-```text
-data/embeddings/embeddings.npy
-data/faiss/faces.index
-data/faiss/manifest.json
-data/faiss/index_metadata.json
-```
-
-Example success output:
-
-```text
-Indexed posts: 2
-Skipped posts: 0
-FAISS index: data/faiss/faces.index
-```
-
-Optional artifact paths can be passed without source edits:
-
-```bash
-python3 scripts/build_index.py \
-  --posts-dir data/posts \
-  --embeddings-dir data/embeddings \
-  --faiss-dir data/faiss
-```
-
-After building, restart FastAPI so its health check sees the generated artifact, then refresh the frontend:
-
-```bash
-python3 -m src.api
-```
-
-The System Posture panel should then report `FAISS INDEX CONNECTED`.
-
-Invalid post directories are reported and skipped. A build with no valid authorized records fails rather than fabricating embeddings or candidates. If a post is skipped, check that its image is supported, large enough, readable, and contains an allowed number of faces.
-
-## Blockchain Deployment
-
-Start Ganache or another Ethereum-compatible local/test network, then set a funded development or test account in `.env`:
+The live search needs a [SerpApi](https://serpapi.com/) key (the free tier allows 250 searches per
+month). Put it in `.env` and switch the provider on:
 
 ```env
-BLOCKCHAIN_RPC_URL=http://127.0.0.1:7545
-PRIVATE_KEY=your_private_key
-WALLET_ADDRESS=your_wallet_address
-BLOCKCHAIN_MODE=local
-CHAIN_ID=0
+SEARCH_PROVIDER=web_reverse_image
+SERPAPI_API_KEY=your_key_here
 ```
 
-Compile and deploy:
+### 3. Start a local chain and deploy the registry
+
+```bash
+npx ganache --port 7545 --wallet.deterministic --chain.chainId 1337
+```
+
+Copy the first account's address and private key into `.env`, then deploy:
 
 ```bash
 python3 scripts/deploy_contract.py
 ```
 
-The deployment artifact contains ABI, bytecode, deployed address, transaction hash, block number, and chain ID. Set `CONTRACT_ADDRESS` in `.env` to the printed deployed address.
+Set the printed address as `CONTRACT_ADDRESS` in `.env`.
 
-## Running the Pipeline
-
-Build the index and deploy the registry first, then run:
+### 4. Run it
 
 ```bash
-python3 -m src.main --image path/to/authorized-face.jpg
+# Backend (http://127.0.0.1:8000, Swagger at /docs)
+python3 -m src.api
+
+# Frontend (http://localhost:3000)
+cd frontend && npm install && cp .env.example .env.local && npm run dev
 ```
 
-Optional controls:
+Point `NEXT_PUBLIC_API_URL` in `frontend/.env.local` at the backend, and make sure that origin is
+listed in `ALLOWED_ORIGINS` in `.env` — a mismatch here is the usual cause of a browser-side
+"failed to fetch".
+
+### Command line
+
+The whole pipeline also runs headless:
 
 ```bash
-python3 -m src.main \
-  --image path/to/authorized-face.jpg \
-  --top-k 5 \
-  --threshold 0.80 \
-  --query-metadata path/to/query-metadata.json
+python3 -m src.main --image path/to/face.jpg
+python3 -m src.main --image path/to/face.jpg --top-k 5 --threshold 0.80
 ```
 
-The CLI prints values from the current execution: image dimensions, face confidence, candidate count, calculated confidence, evidence path and hash, transaction receipt data, and re-verification status. It does not display a successful stage when that stage fails.
+---
 
-The same entry point is available as:
+## Configuration
 
-```bash
-python3 demo/demo_pipeline.py --image path/to/authorized-face.jpg
+All behavior is environment-backed. Copy `.env.example` to `.env` and set what you need.
+
+| Group | Purpose |
+| --- | --- |
+| `FACE_*` | Model choice, detector size, minimum dimensions, quality and confidence gates. |
+| `SEARCH_PROVIDER` | `web_reverse_image` for the live web search, or `authorized_dataset` for the offline local-corpus mode. |
+| `SERPAPI_API_KEY`, `SERPAPI_ENDPOINT`, `SERPAPI_UPLOAD_ENDPOINT` | Live search credentials and endpoints. |
+| `WEB_SEARCH_MAX_ATTEMPTS`, `WEB_SEARCH_MAX_CANDIDATES_SCANNED` | Retry budget and how many candidates get re-verified per run. |
+| `TOP_K`, `MATCH_THRESHOLD`, `*_WEIGHT` | Candidate count, match decision, and multi-signal weighting. |
+| `EVIDENCE_DIR`, `EVIDENCE_VERSION` | Where canonical evidence is written. |
+| `BLOCKCHAIN_RPC_URL`, `PRIVATE_KEY`, `WALLET_ADDRESS`, `CONTRACT_ADDRESS`, `CHAIN_ID` | Chain connection, signing, and the deployed registry. |
+| `API_HOST`, `API_PORT`, `ALLOWED_ORIGINS`, `API_MAX_UPLOAD_BYTES` | API binding, CORS, and upload limit. |
+
+Configuration is validated before every run: weights, thresholds, detector dimensions, blockchain
+mode, and provider-specific requirements are all checked up front rather than failing mid-pipeline.
+
+`.env` is git-ignored. Only `.env.example` (placeholders) is tracked.
+
+### Two search modes
+
+| Mode | Behavior |
+| --- | --- |
+| `web_reverse_image` | Live Google Lens search of the public web. Needs a SerpApi key. This is the mode the project is built around. |
+| `authorized_dataset` | Offline FAISS search over a local consented corpus in `data/posts/`, built with `python3 scripts/build_index.py`. Useful for development without spending search credits. |
+
+---
+
+## Blockchain
+
+**Chain used:** a local Ganache EVM (chain ID `1337`) by default. Any Ethereum-compatible endpoint
+works — point `BLOCKCHAIN_RPC_URL` at a testnet and set a funded key to use one instead.
+
+`contracts/EvidenceRegistry.sol` is deliberately minimal:
+
+```solidity
+function registerEvidence(bytes32 evidenceHash) external;   // rejects empty and duplicate hashes
+function verifyEvidence(bytes32 evidenceHash) external view returns (bool);
+function getEvidence(bytes32 evidenceHash) external view returns (bytes32, uint256, address, bool);
 ```
 
-## Evidence and Tampering
+Only the fingerprint and its provenance go on-chain — never the image, and never personal data.
+The Web3 client can enforce an expected `CHAIN_ID` so evidence cannot be silently registered against
+the wrong network.
 
-Evidence contains dynamic provenance: a generated evidence ID, generated search ID, provider name, retrieved candidate metadata, calculated signals, configured threshold, image fingerprint, and UTC creation time. Canonicalization sorts keys and uses stable JSON separators before SHA-256 hashing.
+---
 
-After a successful pipeline run, demonstrate tamper detection with the saved evidence file:
+## Interface
+
+The Next.js operator console has three pages, all rendering backend responses only:
+
+- **Home** — upload a scan, watch the ten pipeline stages resolve live, then read the match, its
+  discovered source, the evidence hash, the transaction, and the re-verification verdict.
+- **Evidence** — browse every record this machine has generated, with its discovered source, face
+  scores, and fingerprints. Records are read from the API, and any JSON file can be opened locally.
+- **Verify** — submit an evidence file for independent canonicalization, re-hashing, and comparison
+  against the chain.
+
+It ships with a dark theme and a light theme, toggled from the header. When the API, search provider,
+or chain is unreachable the header says so, and failures name the stage that actually failed rather
+than a generic error.
+
+---
+
+## API reference
+
+| Method | Route | Purpose |
+| --- | --- | --- |
+| `GET` | `/health` | API, face model, search provider, and chain status. |
+| `POST` | `/face/analyze` | Validate an image and return real face-processing diagnostics. |
+| `POST` | `/pipeline/run` | Run the full end-to-end pipeline on an uploaded image. |
+| `POST` | `/search` | Search with a supplied 512-dimensional embedding. |
+| `GET` | `/evidence` | List stored evidence records. |
+| `GET` | `/evidence/{id}` | Read one stored evidence record. |
+| `POST` | `/verify` | Re-hash uploaded evidence and compare it with the chain. |
+
+Uploads are written to unique temporary files, restricted by extension and size, and deleted after
+processing. Errors return `{ "error": { "code": "...", "message": "..." } }` with no stack traces or
+secrets. Swagger UI is at `/docs`.
+
+---
+
+## Evidence and tamper detection
+
+Evidence is canonicalized with sorted keys, stable separators, and UTF-8 before hashing, so the same
+record always produces the same SHA-256 — and any change produces a different one.
+
+After a successful run:
 
 ```bash
 python3 demo/tamper_demo.py \
-  --evidence data/evidence/your-evidence-id.json \
+  --evidence data/evidence/<evidence-id>.json \
   --field caption \
-  --value "Modified authorized caption"
+  --value "Modified caption"
 ```
 
-The command re-hashes the original evidence, fetches the actual chain record, deep-copies the evidence, modifies the specified field, hashes the modified copy, and compares both hashes with the original record. The verdict is calculated from real hashes and contract reads: the original can be `VERIFIED`; a meaningful modification is `TAMPER DETECTED`.
+The command hashes the original, fetches the real on-chain record, deep-copies and modifies the
+evidence, hashes the copy, and compares both against the chain. The original returns `VERIFIED`;
+the modified copy returns `TAMPER DETECTED`. Both verdicts are computed from real hashes and real
+contract reads.
+
+---
 
 ## Testing
 
 ```bash
-python3 -m pytest -q
+python3 -m pytest -q      # 37 passing
 ```
 
-The suite covers image validation, detection behavior, embedding normalization, index generation, FAISS-result mapping, ranking, confidence scoring, canonical JSON, hashing, evidence persistence, tampering detection, and injected-boundary pipeline integration.
+Covers image validation, detection behavior, embedding normalization, index generation, FAISS result
+mapping, ranking, confidence scoring, canonical JSON, hashing, evidence persistence, tamper
+detection, and injected-boundary pipeline integration. Doubles are used only at the external model,
+FAISS, and blockchain boundaries — no test claims a live transaction.
 
-Unit tests use controlled doubles only at external model, FAISS, and blockchain boundaries. They do not claim a live transaction. A live end-to-end validation needs a populated authorized dataset, InsightFace runtime, FAISS installation, reachable EVM node, deployed contract, and funded wallet.
+---
 
-## Frontend
+## Privacy and authorization
 
-The `frontend/` directory contains the TraceChain AI operator console. It is a Next.js App Router application written in TypeScript with a custom responsive visual system, Framer Motion transitions, and Lucide icons. The interface is intentionally data-driven: candidate posts, confidence scores, evidence hashes, transaction details, and verdicts are rendered only from API responses.
+- Only upload images you own or are authorized to process.
+- The query image is sent to SerpApi to perform the lookup and is discarded there after ten minutes.
+  It is never published to a public URL by this project.
+- Nothing about the person goes on-chain — only a hash.
+- `.env`, keys, wallets, generated evidence, indexes, and the downloaded-candidate cache are all
+  git-ignored.
+- A high similarity score is not proof of legal identity and must not be the sole basis of a
+  high-impact decision.
 
-### Run the frontend
+---
 
-```bash
-cd frontend
-npm install
-cp .env.example .env.local
-npm run dev
-```
+## Known limitations
 
-For a production build:
-
-```bash
-npm run build
-npm start
-```
-
-Configure `NEXT_PUBLIC_API_URL` in `frontend/.env.local` with the URL of the FastAPI service, plus endpoint variables if the service uses different routes. The client currently calls the configured health endpoint and pipeline endpoint, defaulting to `/health` and `/pipeline/run` respectively.
-
-### Backend boundary
-
-The frontend communicates with the FastAPI adapter through the configured REST base URL. It renders only backend responses and shows unavailable or error states when the API, FAISS index, or blockchain dependencies are not ready; it does not provide a fabricated demo mode.
-
-### Available pages
-
-- `/` and `/dashboard`: upload an authorized face scan, run the configured pipeline endpoint, and inspect returned match, evidence, blockchain, and re-verification data.
-- `/evidence`: locally inspect a selected evidence JSON file without modifying it or sending it anywhere.
-- `/verify`: submit an evidence JSON file to the configured verification endpoint.
-
-The frontend does not provide a fake demo mode. With no API configured, its unavailable and error states are the expected behavior.
-
-## FastAPI Backend
-
-The API adapter is available at `src/api/main.py` and delegates execution to the existing core modules. It does not duplicate face processing, FAISS search, evidence hashing, blockchain registration, or re-verification logic.
-
-### Run the API
-
-Install the API dependencies from the repository root, then start Uvicorn:
-
-```bash
-pip install -r requirements.txt
-python -m src.api
-```
-
-Swagger UI is available at `http://127.0.0.1:8000/docs` when the service is running. The host, port, CORS origins, and upload limit are configured through `API_HOST`, `API_PORT`, `ALLOWED_ORIGINS`, and `API_MAX_UPLOAD_BYTES`.
-
-### API endpoints
-
-| Method | Route | Purpose |
-| --- | --- | --- |
-| `GET` | `/health` | Reports API, InsightFace dependency, FAISS index, and blockchain status. |
-| `POST` | `/face/analyze` | Validates an uploaded image and returns actual face-processing diagnostics. |
-| `POST` | `/pipeline/run` | Executes the existing end-to-end pipeline with an uploaded image. |
-| `POST` | `/search` | Searches the configured authorized FAISS dataset using a supplied 512-dimensional embedding. |
-| `POST` | `/verify` | Canonicalizes uploaded evidence, recreates its hash, and compares it with the blockchain record. |
-
-Image uploads are written to unique temporary files, restricted to configured extensions and size, and deleted after processing. API errors use `{ "error": { "code": "...", "message": "..." } }` without returning stack traces or secrets.
-
-## Security and Limitations
-
-### Security model
-
-- `.env`, key files, PEM files, wallet folders, generated evidence, indexes, build artifacts, and logs are ignored by Git.
-- Private keys are read from environment variables or explicit function parameters only.
-- The contract rejects empty and duplicate fingerprints.
-- The Web3 client can enforce a configured chain ID.
-- The blockchain stores an evidence fingerprint and provenance, not the original image bytes.
-
-### Known limitations
-
-- The only built-in source is a local authorized dataset; no unrestricted public-social-media crawler is included.
-- `IndexFlatIP` is exact and appropriate for a demonstration corpus; a large deployment may require a different FAISS index strategy.
-- Similarity is not legal identity proof or source-truth proof.
-- Perceptual image similarity is optional and is not standalone image-forensics proof.
-- Blockchain registration proves a particular fingerprint existed at a chain state; it does not prove that underlying content was truthful or authorized.
-- Live blockchain execution cannot be verified without user-provided local/testnet infrastructure and credentials.
-
-## Submission Checklist
-
-- [ ] Add only authorized or consented content to `data/posts/`
-- [ ] Build the FAISS index
-- [ ] Start and configure an EVM node
-- [ ] Deploy `EvidenceRegistry.sol`
-- [ ] Set `CONTRACT_ADDRESS` in `.env`
-- [ ] Run the pipeline successfully
-- [ ] Run the tampering demonstration
-- [ ] Record the terminal demonstration
-
-## Contributor
-
-- [Ankit Pandey](https://github.com/ankit25bcs10610) - Project creator and maintainer
-
-TraceChain AI is maintained by Ankit Pandey.
+- **Reverse image search only finds already-public images.** A private photo with no web presence
+  returns no matches. That is correct behavior, not a failure.
+- **Search results vary between runs.** The live web changes, and Google's matching is not
+  deterministic. The pipeline retries, but a run can legitimately come back empty.
+- **The free SerpApi tier allows 250 searches per month**, and each pipeline run uses at least one.
+- **Candidate re-verification depends on the candidate image being fetchable** and containing a
+  detectable face; pages that only expose tiny thumbnails are skipped.
+- **Perceptual image similarity is a supporting signal**, not standalone image forensics.
+- **On-chain registration proves a fingerprint existed at a chain state.** It does not prove the
+  underlying content is truthful, nor that the identification is correct.
+- Face recognition accuracy varies with pose, lighting, occlusion, and demographic factors. Treat
+  every result as a lead requiring human review.

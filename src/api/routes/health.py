@@ -14,7 +14,7 @@ router = APIRouter(tags=["health"])
 
 def _search_status() -> str:
     if settings.SEARCH_PROVIDER == "web_reverse_image":
-        return "available" if settings.SERPAPI_API_KEY and settings.GITHUB_HOST_OWNER else "unavailable"
+        return "available" if settings.SERPAPI_API_KEY else "unavailable"
     search_index = Path(settings.FAISS_DIR) / settings.INDEX_NAME
     return "available" if search_index.is_file() else "unavailable"
 

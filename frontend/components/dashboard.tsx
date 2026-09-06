@@ -14,6 +14,7 @@ import {
   LoaderCircle,
   LockKeyhole,
   ScanFace,
+  Search,
   ShieldCheck,
   UploadCloud,
   X
@@ -38,6 +39,28 @@ const stageLabels = [
 ] as const;
 
 const initialStages: PipelineStage[] = stageLabels.map(([id, label]) => ({ id, label, state: "pending" }));
+
+// Which pipeline stage each backend error code corresponds to. Everything
+// before the failing stage genuinely succeeded, so the trace should say so.
+const FAILED_STAGE_BY_CODE: Record<string, number> = {
+  INVALID_IMAGE_TYPE: 0,
+  FILE_TOO_LARGE: 0,
+  INVALID_IMAGE: 0,
+  INVALID_METADATA: 0,
+  FACE_NOT_DETECTED: 1,
+  FACE_PROCESSING_FAILED: 2,
+  NO_MATCH_FOUND: 3,
+  SEARCH_UNAVAILABLE: 3,
+  BLOCKCHAIN_UNAVAILABLE: 8,
+  VERIFICATION_FAILED: 9
+};
+
+function stagesAfterFailure(failedIndex: number): PipelineStage[] {
+  return initialStages.map((stage, index) => ({
+    ...stage,
+    state: index < failedIndex ? "success" : index === failedIndex ? "failed" : "pending"
+  }));
+}
 
 function formatPercent(value?: number | null) {
   return typeof value === "number" ? `${(value * 100).toFixed(1)}%` : "—";
@@ -85,6 +108,7 @@ export default function Dashboard() {
   const [stages, setStages] = useState(initialStages);
   const [result, setResult] = useState<PipelineResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
   const [runsThisSession, setRunsThisSession] = useState(0);
   const [matchesThisSession, setMatchesThisSession] = useState(0);
   const [evidenceThisSession, setEvidenceThisSession] = useState(0);
@@ -102,7 +126,7 @@ export default function Dashboard() {
     if (!next) return;
     if (!next.type.match(/^image\/(jpeg|png)$/)) { setError("Please choose a JPG, JPEG, or PNG image."); return; }
     if (next.size > 10 * 1024 * 1024) { setError("The selected image is larger than 10 MB."); return; }
-    setError(null); setResult(null); setStages(initialStages); setFile(next);
+    setError(null); setNotice(null); setResult(null); setStages(initialStages); setFile(next);
     setPreview(URL.createObjectURL(next));
   };
 
@@ -112,7 +136,7 @@ export default function Dashboard() {
 
   const run = async () => {
     if (!file || running) return;
-    setRunning(true); setError(null); setResult(null);
+    setRunning(true); setError(null); setNotice(null); setResult(null);
     setStages(initialStages.map((stage, index) => ({ ...stage, state: index === 0 ? "processing" : "pending" })));
     setRunsThisSession((count) => count + 1);
     try {
@@ -122,8 +146,21 @@ export default function Dashboard() {
       if (response.match?.match) setMatchesThisSession((count) => count + 1);
       if (response.evidence_hash) setEvidenceThisSession((count) => count + 1);
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : "The pipeline request failed.");
-      setStages((current) => current.map((stage, index) => ({ ...stage, state: index === 0 ? "failed" : "pending" })));
+      const failure = caught as Error & { code?: string };
+      const code = failure.code;
+      const message = failure.message || "The pipeline request failed.";
+
+      if (code === "API_UNREACHABLE") {
+        setError(message);
+        setStages(initialStages);
+      } else if (code === "NO_MATCH_FOUND") {
+        // Not a failure of the system: the search ran and found nothing public.
+        setNotice(message);
+        setStages(stagesAfterFailure(3));
+      } else {
+        setError(message);
+        setStages(stagesAfterFailure(code && code in FAILED_STAGE_BY_CODE ? FAILED_STAGE_BY_CODE[code] : 0));
+      }
     } finally { setRunning(false); }
   };
 
@@ -184,11 +221,21 @@ export default function Dashboard() {
             <input ref={inputRef} type="file" accept="image/jpeg,image/png" onChange={handleInput} hidden />
           </div>
           {file && <button className="remove-scan" onClick={(event) => { event.stopPropagation(); removeFile(); }}><X size={13} /> Remove scan</button>}
-          <div className="consent-line"><LockKeyhole size={14} /><span>Authorized content only. To search the web, this image is briefly hosted at a public URL so it can be fetched — it is not kept private during that step.</span></div>
+          <div className="consent-line"><LockKeyhole size={14} /><span>Authorized content only. Your image is sent to the search provider to run the lookup and is discarded there after ten minutes. It is never published to a public URL.</span></div>
           <button className="run-btn" disabled={!file || running} onClick={run}>
             {running ? <><LoaderCircle className="spin" size={16} /> Processing pipeline…</> : <><Activity size={16} /> Run TraceChain pipeline</>}
           </button>
           {error && <div className="error-line"><CircleAlert size={15} /><span>{error}</span></div>}
+          {notice && (
+            <div className="notice-line">
+              <Search size={15} />
+              <div>
+                <strong>No public match found</strong>
+                <span>{notice}</span>
+                <span className="hint">Try an image that is already published online — the search can only find photos the web already has.</span>
+              </div>
+            </div>
+          )}
         </div>
 
         <div className="col">

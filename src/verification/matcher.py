@@ -53,8 +53,8 @@ def perceptual_image_similarity(query_path: str | Path, candidate_path: str | Pa
     try:
         query_hash = imagehash.phash(Image.open(query))
         candidate_hash = imagehash.phash(Image.open(candidate))
-        distance = query_hash - candidate_hash
-        return 1.0 - (distance / len(query_hash.hash) ** 2)
+        distance = int(query_hash - candidate_hash)
+        return float(1.0 - (distance / len(query_hash.hash) ** 2))
     except (OSError, ValueError) as exc:
         raise MatchVerificationError(f"Unable to calculate perceptual image similarity: {exc}") from exc
 
@@ -97,5 +97,9 @@ def verify_match(
     metadata_score = metadata_consistency(query_metadata, candidate.metadata)
     signals = [(face_similarity, face_weight), (image_similarity, image_weight), (metadata_score, metadata_weight)]
     available = [(value, weight) for value, weight in signals if value is not None]
-    confidence = sum(value * weight for value, weight in available) / sum(weight for _, weight in available)
-    return MatchResult(confidence >= threshold, confidence, face_similarity, image_similarity, metadata_score, candidate)
+    confidence = float(sum(value * weight for value, weight in available) / sum(weight for _, weight in available))
+    image_similarity = None if image_similarity is None else float(image_similarity)
+    metadata_score = None if metadata_score is None else float(metadata_score)
+    return MatchResult(
+        bool(confidence >= threshold), confidence, float(face_similarity), image_similarity, metadata_score, candidate
+    )
