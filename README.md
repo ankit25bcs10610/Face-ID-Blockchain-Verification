@@ -2,7 +2,14 @@
 
 > **From authorized face scans to verifiable, tamper-evident evidence.**
 
-TraceChain AI is a privacy-aware Python pipeline that demonstrates how a face image can be matched against **authorized content only**, verified using multiple signals, converted into deterministic evidence, and anchored to an Ethereum-compatible blockchain.
+[![Python](https://img.shields.io/badge/Python-3.10%2B-3776AB?logo=python&logoColor=white)](https://www.python.org/)
+[![FastAPI](https://img.shields.io/badge/API-FastAPI-009688?logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com/)
+[![Next.js](https://img.shields.io/badge/UI-Next.js-000000?logo=next.js&logoColor=white)](https://nextjs.org/)
+[![Tests](https://img.shields.io/badge/tests-35%20passing-2ea44f)](#testing)
+
+TraceChain AI is an end-to-end, consent-first evidence pipeline for authorized visual content. It combines face processing, vector retrieval, multi-signal verification, deterministic evidence hashing, and Ethereum-compatible registry anchoring behind a CLI, REST API, and operator console.
+
+> **Important:** This project is a technical demonstration, not an identity service or a substitute for legal, forensic, or high-impact decision-making review.
 
 ```text
 Authorized face image
@@ -43,7 +50,7 @@ Images and metadata added to that corpus must be user-owned, explicitly consente
 
 ![TraceChain AI architecture: authorized face processing, FAISS search, verification, evidence hashing, blockchain registration, and re-verification](assets/tracechain-architecture.png)
 
-The diagram summarizes the real pipeline implementation. The optional reverse-image-search branch shown is intentionally not enabled by the default provider; the repository searches only the authorized local dataset described in this README.
+The diagram summarizes the implemented system. The API and frontend are interaction layers; the business logic remains in the reusable Python core. The optional reverse-image-search branch shown in the diagram is intentionally not enabled by the default provider. Searches are restricted to the configured authorized local dataset.
 
 ## Workflow
 
@@ -89,10 +96,11 @@ src/
   blockchain/                   # RPC client, registry, re-verification
   config/                       # Environment-backed settings
   api/                          # FastAPI routes, schemas, errors, middleware
-services/
+src/services/
   pipeline_service.py           # Secure API adapter around the core pipeline
-  main.py                       # End-to-end command-line pipeline
+src/main.py                     # End-to-end command-line pipeline
 tests/                          # Unit and injected-boundary integration tests
+frontend/                       # Next.js operator console
 ```
 
 ## Installation
@@ -265,7 +273,7 @@ Configure `NEXT_PUBLIC_API_URL` in `frontend/.env.local` with the URL of the Fas
 
 ### Backend boundary
 
-This repository currently contains the Python CLI/core pipeline, not a FastAPI server. Until an API adapter is added and started, the frontend will correctly show the API and blockchain as unavailable and will not display fabricated runtime results. The UI is ready to consume the configured JSON response from the existing pipeline contract once that adapter exists.
+The frontend communicates with the FastAPI adapter through the configured REST base URL. It renders only backend responses and shows unavailable or error states when the API, FAISS index, or blockchain dependencies are not ready; it does not provide a fabricated demo mode.
 
 ### Available pages
 
