@@ -67,6 +67,7 @@ def create_evidence(
         raise EvidenceError("Evidence can only be generated for a verified match")
     metadata = result.candidate.metadata
     evidence_id = str(uuid.uuid4())
+    search_results = getattr(search, "results", []) if search is not None else []
     evidence = {
         "version": settings.EVIDENCE_VERSION,
         "evidence_id": evidence_id,
@@ -75,6 +76,17 @@ def create_evidence(
         "search": {
             "search_id": getattr(search, "search_id", None),
             "provider": getattr(search, "provider", None),
+            # Preserve the complete ranked discovery set so a stored record
+            # can be audited after reload, not just the winning candidate.
+            "results": [
+                {
+                    "post_id": item.post_id,
+                    "similarity_score": item.similarity_score,
+                    "image_path": item.image_path,
+                    "metadata": item.metadata,
+                }
+                for item in search_results
+            ],
         },
         "post_id": result.candidate.post_id,
         "platform": metadata.get("platform"),

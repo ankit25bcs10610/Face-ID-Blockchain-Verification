@@ -105,7 +105,7 @@ export default function SiteNav() {
   return (
     <header className="site-nav">
       <div className="brandblock">
-        <span className="seal" aria-hidden="true"><TraceLogo /></span>
+        <span className="seal"><img className="brand-logo" src="/orynex-logo.jpg" alt="ORYNEX AI logo" /></span>
         <div>
           <span className="name">
             ORY<span>NEX</span> AI

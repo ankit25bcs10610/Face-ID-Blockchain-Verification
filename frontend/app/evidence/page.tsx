@@ -1,6 +1,6 @@
 "use client";
 
-import { ChevronDown, CircleAlert, ExternalLink, FileText, Hash, ImageOff, LoaderCircle, RefreshCw, ScanFace, ShieldCheck, Upload } from "lucide-react";
+import { ChevronDown, CircleAlert, ExternalLink, FileText, Hash, ImageOff, LoaderCircle, RefreshCw, ScanFace, Search, ShieldCheck, Upload } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import SiteNav from "@/components/site-nav";
 import { evidenceMediaUrl, listEvidence, readEvidenceRecord, type EvidenceSummary } from "@/lib/api";
@@ -153,6 +153,8 @@ export default function EvidencePage() {
   const { Icon: DetailIcon, label: detailPlatform } = platformFor(postUrl ?? String(detail?.platform ?? ""));
   const detailId = typeof detail?.evidence_id === "string" ? detail.evidence_id : null;
   const detailMedia = (detail?.media ?? {}) as Record<string, string | undefined>;
+  const storedSearch = (detail?.search ?? {}) as Record<string, unknown>;
+  const storedSources = Array.isArray(storedSearch.results) ? storedSearch.results as Array<Record<string, unknown>> : [];
   // Local files are read from disk and have no server-side media to fetch.
   const canLoadMedia = Boolean(detailId && !localFile);
 
@@ -314,6 +316,30 @@ export default function EvidencePage() {
                 <div className="data-row"><span>Search provider</span><span className="val">{show((detail.search as Record<string, unknown> | undefined)?.provider)}</span></div>
                 <div className="data-row"><span>Sealed at</span><span className="val">{show(detail.verification_timestamp)}</span></div>
               </div>
+
+              {storedSources.length > 0 && (
+                <div className="detail-group stored-sources">
+                  <div className="detail-group-title"><Search size={13} /> All discovered sources · {storedSources.length}</div>
+                  <div className="stored-source-list">
+                    {storedSources.map((source, index) => {
+                      const metadata = (source.metadata ?? {}) as Record<string, unknown>;
+                      const sourceUrl = typeof metadata.post_url === "string" ? metadata.post_url : typeof source.post_id === "string" && source.post_id.startsWith("http") ? source.post_id : undefined;
+                      const { Icon, label } = platformFor(sourceUrl ?? String(metadata.platform ?? ""));
+                      return (
+                        <div className="stored-source-row" key={`${String(source.post_id)}-${index}`}>
+                          <span className="platform-icon"><Icon size={15} /></span>
+                          <span className="stored-source-info">
+                            <strong>{label}</strong>
+                            <span>{show(metadata.title ?? metadata.caption ?? source.post_id)}</span>
+                          </span>
+                          <b>{percent(typeof source.similarity_score === "number" ? source.similarity_score : null)}</b>
+                          {sourceUrl && <a href={sourceUrl} target="_blank" rel="noreferrer" aria-label={`Open ${label} source`}><ExternalLink size={13} /></a>}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
 
               <div className="detail-columns">
                 <div className="detail-group">
