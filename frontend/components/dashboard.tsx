@@ -3,16 +3,21 @@
 import {
   Activity,
   ArrowRight,
+  Boxes,
   Check,
   CircleAlert,
   Copy,
   FileCheck2,
+  FileText,
   Fingerprint,
+  Globe,
   Hash,
   Image as ImageIcon,
   Link2,
+  ListFilter,
   LoaderCircle,
   LockKeyhole,
+  RefreshCw,
   ScanFace,
   Search,
   ShieldCheck,
@@ -53,6 +58,101 @@ const STAGE_INDEX_BY_NAME: Record<string, number> = {
 };
 
 const initialStages: PipelineStage[] = stageLabels.map(([id, label]) => ({ id, label, state: "pending" }));
+
+const PHASES = [
+  { key: "INPUT", note: "Read the image", from: 0 },
+  { key: "ANALYZE", note: "Find and verify a match", from: 3 },
+  { key: "BUILD", note: "Create the record", from: 6 },
+  { key: "VERIFY", note: "Seal and confirm", from: 8 }
+] as const;
+
+const STAGE_META = [
+  { Icon: ImageIcon, desc: "Checking format, size, and readability" },
+  { Icon: ScanFace, desc: "Locating the face and its landmarks" },
+  { Icon: Fingerprint, desc: "Generating the ArcFace vector" },
+  { Icon: Globe, desc: "Searching the open web for the same face" },
+  { Icon: ListFilter, desc: "Re-embedding and ranking each candidate" },
+  { Icon: ShieldCheck, desc: "Scoring the best candidate against the threshold" },
+  { Icon: FileText, desc: "Writing the canonical evidence record" },
+  { Icon: Hash, desc: "Fingerprinting the record with SHA-256" },
+  { Icon: Boxes, desc: "Registering the fingerprint on-chain" },
+  { Icon: RefreshCw, desc: "Re-reading the chain and comparing hashes" }
+];
+
+function short(value: unknown, keep = 10) {
+  const text = typeof value === "string" ? value : value === undefined || value === null ? "" : String(value);
+  if (!text) return "—";
+  return text.length > keep ? `${text.slice(0, keep)}…` : text;
+}
+
+/**
+ * Per-stage readouts, filled in from the run's own output. Anything the
+ * pipeline has not produced yet stays as an em dash.
+ */
+function stageDetails(
+  index: number,
+  file: File | null,
+  dimensions: string | null,
+  result: PipelineResponse | null
+): Array<[string, string]> {
+  const evidence = (result?.evidence ?? {}) as Record<string, unknown>;
+  const candidates = result?.search?.results ?? [];
+  const best = result?.candidate ?? candidates[0];
+  switch (index) {
+    case 0:
+      return [
+        ["Format", file?.type?.replace("image/", "").toUpperCase() || "—"],
+        ["Size", file ? `${(file.size / 1024 / 1024).toFixed(2)} MB` : "—"],
+        ["Resolution", dimensions ?? "—"]
+      ];
+    case 1:
+      return [["Detector", "SCRFD"], ["Landmarks", "5-point"], ["Faces required", "1"]];
+    case 2:
+      return [["Model", "ArcFace"], ["Dimensions", result?.search ? "512" : "—"], ["Normalized", result?.search ? "Yes" : "—"]];
+    case 3:
+      return [
+        ["Provider", String(result?.search?.provider ?? "—")],
+        ["Candidates", candidates.length ? String(candidates.length) : "—"],
+        ["Scope", "Public web"]
+      ];
+    case 4:
+      return [
+        ["Top source", String(best?.metadata?.platform ?? "—")],
+        ["Top similarity", formatPercent(best?.similarity_score)],
+        ["Ranked", candidates.length ? String(candidates.length) : "—"]
+      ];
+    case 5:
+      return [
+        ["Threshold", formatPercent(evidence.match_threshold as number)],
+        ["Confidence", formatPercent(result?.match?.confidence)],
+        ["Decision", result ? (result.match?.match ? "Match" : "No match") : "—"]
+      ];
+    case 6:
+      return [
+        ["Evidence ID", short(evidence.evidence_id, 12)],
+        ["Version", String(evidence.version ?? "—")],
+        ["Images kept", evidence.media ? "2" : "—"]
+      ];
+    case 7:
+      return [
+        ["Evidence hash", short(result?.evidence_hash, 12)],
+        ["Matched image", short(evidence.image_hash, 12)],
+        ["Scanned image", short(evidence.query_image_hash, 12)]
+      ];
+    case 8:
+      return [
+        ["Transaction", short(result?.blockchain?.transaction_hash, 12)],
+        ["Block", result?.blockchain?.block_number !== undefined ? String(result.blockchain.block_number) : "—"],
+        ["Contract", short(result?.blockchain?.contract_address, 12)]
+      ];
+    default:
+      return [
+        ["On-chain hash", short(result?.reverification?.blockchain_hash, 12)],
+        ["Local hash", short(result?.reverification?.local_hash, 12)],
+        ["Verdict", String(result?.reverification?.status ?? "—")]
+      ];
+  }
+}
 
 // Which pipeline stage each backend error code corresponds to. Everything
 // before the failing stage genuinely succeeded, so the trace should say so.
@@ -123,6 +223,7 @@ export default function Dashboard() {
   const [result, setResult] = useState<PipelineResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const [dimensions, setDimensions] = useState<string | null>(null);
   const [runsThisSession, setRunsThisSession] = useState(0);
   const [matchesThisSession, setMatchesThisSession] = useState(0);
   const [evidenceThisSession, setEvidenceThisSession] = useState(0);
@@ -140,13 +241,13 @@ export default function Dashboard() {
     if (!next) return;
     if (!next.type.match(/^image\/(jpeg|png)$/)) { setError("Please choose a JPG, JPEG, or PNG image."); return; }
     if (next.size > 10 * 1024 * 1024) { setError("The selected image is larger than 10 MB."); return; }
-    setError(null); setNotice(null); setResult(null); setStages(initialStages); setFile(next);
+    setError(null); setNotice(null); setResult(null); setStages(initialStages); setFile(next); setDimensions(null);
     setPreview(URL.createObjectURL(next));
   };
 
   const handleInput = (event: ChangeEvent<HTMLInputElement>) => chooseFile(event.target.files?.[0]);
   const handleDrop = (event: DragEvent<HTMLDivElement>) => { event.preventDefault(); setDragging(false); chooseFile(event.dataTransfer.files?.[0]); };
-  const removeFile = () => { if (preview) URL.revokeObjectURL(preview); setFile(null); setPreview(null); setResult(null); setStages(initialStages); };
+  const removeFile = () => { if (preview) URL.revokeObjectURL(preview); setFile(null); setPreview(null); setResult(null); setStages(initialStages); setDimensions(null); };
 
   const run = async () => {
     if (!file || running) return;
@@ -212,10 +313,29 @@ export default function Dashboard() {
             re-verifies the match with its own face model, and seals the result on-chain.
           </p>
         </div>
-        <div className="hero-meta">
-          <div><strong>Live web search</strong>Google Lens, not a fixed dataset</div>
-          <div><strong>Local Ethereum chain</strong>Ganache · chain 1337</div>
-        </div>
+        <aside className="hero-flow" aria-label="How a scan becomes a record">
+          {[
+            { Icon: ScanFace, title: "Scan a face", note: "Detection, then a 512-dimension ArcFace vector" },
+            { Icon: Globe, title: "Search the open web", note: "Google Lens finds where that face appears" },
+            { Icon: ShieldCheck, title: "Re-verify the hit", note: "Each candidate is re-embedded and scored here" },
+            { Icon: Boxes, title: "Seal it on-chain", note: "The record's fingerprint becomes tamper-evident" }
+          ].map((step, index) => (
+            <div className="flow-step" key={step.title}>
+              <span className="flow-rail">
+                <span className="flow-node"><step.Icon size={15} /></span>
+                {index < 3 && <span className="flow-line" />}
+              </span>
+              <span className="flow-text">
+                <strong>{step.title}</strong>
+                <span>{step.note}</span>
+              </span>
+            </div>
+          ))}
+          <div className="flow-facts">
+            <div><strong>Live web search</strong><span>Google Lens, not a fixed dataset</span></div>
+            <div><strong>Local Ethereum chain</strong><span>Ganache · chain 1337</span></div>
+          </div>
+        </aside>
       </section>
 
       <section className="stat-strip">
@@ -242,7 +362,11 @@ export default function Dashboard() {
           >
             {preview ? (
               <>
-                <img src={preview} alt="Selected face scan preview" />
+                <img
+                  src={preview}
+                  alt="Selected face scan preview"
+                  onLoad={(event) => setDimensions(`${event.currentTarget.naturalWidth} × ${event.currentTarget.naturalHeight}`)}
+                />
                 <div className="preview-tag"><span><FileCheck2 size={13} /> {file?.name}</span><b>{file ? `${(file.size / 1024 / 1024).toFixed(2)} MB` : ""}</b></div>
               </>
             ) : (
@@ -280,16 +404,42 @@ export default function Dashboard() {
               <span className="tag">{result?.pipeline_id ? `Run ${result.pipeline_id.slice(0, 8)}` : "Awaiting input"}</span>
             </span>
           </div>
+          <p className="col-note">
+            Each step runs in sequence on the backend and reports here as it finishes.
+          </p>
           <div className="trace-list">
-            {stages.map((stage, index) => (
-              <div className={`trace-row ${stage.state}`} key={stage.id}>
-                <span className="n">{String(index + 1).padStart(2, "0")}</span>
-                <span style={{ display: "flex", alignItems: "center", gap: 9 }}>
-                  <StageDot state={stage.state} /> {stage.label}
-                </span>
-                <span className="state">{stage.state}</span>
-              </div>
-            ))}
+            {stages.map((stage, index) => {
+              const meta = STAGE_META[index];
+              const phase = PHASES.find((entry) => entry.from === index);
+              return (
+                <div className="trace-block" key={stage.id}>
+                  {phase && (
+                    <div className="trace-phase">
+                      <span>{phase.key}</span>
+                      <small>{phase.note}</small>
+                    </div>
+                  )}
+                  <div className={`trace-row ${stage.state}`}>
+                    <span className="rail">
+                      <span className="rail-node"><StageDot state={stage.state} /></span>
+                      {index < stages.length - 1 && <span className="rail-line" />}
+                    </span>
+                    <span className="n">{String(index + 1).padStart(2, "0")}</span>
+                    <span className="trace-icon"><meta.Icon size={17} /></span>
+                    <span className="trace-text">
+                      <strong>{stage.label}</strong>
+                      <small>{meta.desc}</small>
+                    </span>
+                    <span className="trace-facts">
+                      {stageDetails(index, file, dimensions, result).map(([key, value]) => (
+                        <span key={key}><i>{key}</i><b>{value}</b></span>
+                      ))}
+                    </span>
+                    <span className="state">{stage.state}</span>
+                  </div>
+                </div>
+              );
+            })}
           </div>
         </div>
 
