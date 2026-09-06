@@ -74,8 +74,20 @@ export function evidenceMediaUrl(evidenceId: string, kind: "query" | "match") {
   return endpoint(`/evidence/${encodeURIComponent(evidenceId)}/media/${kind}`);
 }
 
-export function listEvidence() {
-  return request<{ count: number; records: EvidenceSummary[] }>("/evidence");
+export async function listEvidence(): Promise<{ count: number; records: EvidenceSummary[] }> {
+  // Keep the UI compatible with both the current API envelope and older/local
+  // backends that returned the records array directly.
+  const payload = await request<unknown>("/evidence");
+  if (Array.isArray(payload)) {
+    return { count: payload.length, records: payload as EvidenceSummary[] };
+  }
+  if (typeof payload === "object" && payload !== null) {
+    const records = (payload as { records?: unknown }).records;
+    if (Array.isArray(records)) {
+      return { count: records.length, records: records as EvidenceSummary[] };
+    }
+  }
+  return { count: 0, records: [] };
 }
 
 export function readEvidenceRecord(id: string) {

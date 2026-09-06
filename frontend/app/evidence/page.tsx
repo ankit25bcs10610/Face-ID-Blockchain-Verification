@@ -56,9 +56,14 @@ export default function EvidencePage() {
     setLoading(true);
     listEvidence()
       .then((data) => {
-        setRecords(data.records);
+        const nextRecords = Array.isArray(data.records) ? data.records : [];
+        setRecords(nextRecords);
         setError(null);
-        setSelectedId((current) => current ?? data.records[0]?.evidence_id ?? null);
+        setSelectedId((current) => {
+          // Preserve the current selection only while it still exists.
+          if (current && nextRecords.some((record) => record.evidence_id === current)) return current;
+          return nextRecords[0]?.evidence_id ?? null;
+        });
       })
       .catch((caught: Error) => setError(caught.message))
       .finally(() => setLoading(false));

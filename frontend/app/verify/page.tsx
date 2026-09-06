@@ -49,7 +49,7 @@ export default function VerifyPage() {
           <p className="kicker">Independent cryptographic verification</p>
           <h1>Verify evidence integrity</h1>
           <p className="lede">
-            Submit a TraceChain evidence record. The backend canonicalizes it, recalculates its SHA-256
+            Submit an ORYNEX AI evidence record. The backend canonicalizes it, recalculates its SHA-256
             fingerprint, reads the commitment stored on-chain, and compares the two.
           </p>
         </div>

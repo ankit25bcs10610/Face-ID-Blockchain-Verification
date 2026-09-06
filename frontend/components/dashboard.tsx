@@ -309,7 +309,7 @@ export default function Dashboard() {
           <p className="kicker">Authorized evidence intelligence</p>
           <h1>From a face scan to a <i>verifiable record</i>.</h1>
           <p className="lede">
-            Upload an authorized image. TraceChain searches the open web for a genuine matching post,
+            Upload an authorized image. ORYNEX AI searches the open web for a genuine matching post,
             re-verifies the match with its own face model, and seals the result on-chain.
           </p>
         </div>
@@ -383,7 +383,7 @@ export default function Dashboard() {
           {file && <button className="remove-scan" onClick={(event) => { event.stopPropagation(); removeFile(); }}><X size={13} /> Remove scan</button>}
           <div className="consent-line"><LockKeyhole size={14} /><span>Authorized content only. Your image is sent to the search provider to run the lookup and is discarded there after ten minutes. It is never published to a public URL.</span></div>
           <button className="run-btn" disabled={!file || running} onClick={run}>
-            {running ? <><LoaderCircle className="spin" size={16} /> Processing pipeline…</> : <><Activity size={16} /> Run TraceChain pipeline</>}
+            {running ? <><LoaderCircle className="spin" size={16} /> Processing pipeline…</> : <><Activity size={16} /> Run ORYNEX AI pipeline</>}
           </button>
           {error && <div className="error-line"><CircleAlert size={15} /><span>{error}</span></div>}
           {notice && (
@@ -562,7 +562,7 @@ export default function Dashboard() {
       )}
 
       <footer className="site-footer">
-        <span><strong>TraceChain AI</strong> — authorized evidence infrastructure</span>
+        <span><strong>ORYNEX AI</strong> — authorized evidence infrastructure</span>
         <span>No fabricated runtime data</span>
         <span>v1.0 · local core</span>
       </footer>

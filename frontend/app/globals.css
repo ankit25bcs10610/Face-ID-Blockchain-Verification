@@ -92,27 +92,46 @@ code, pre { font-family: var(--font-mono); }
   display: flex;
   align-items: center;
   gap: 28px;
-  padding: 20px var(--edge);
+  padding: 16px var(--edge);
   border-bottom: 1px solid var(--line);
 }
 .seal {
-  width: 40px; height: 40px;
-  border-radius: 50%;
-  border: 1.5px solid var(--gold);
+  width: 52px; height: 52px;
+  border-radius: 15px;
+  border: 1px solid rgba(225, 166, 53, .55);
   display: grid;
   place-items: center;
   color: var(--gold);
   flex: none;
-  background: var(--gold-wash);
+  background: radial-gradient(circle at 35% 20%, rgba(255, 198, 70, .2), transparent 55%), #0c0c0c;
+  box-shadow: inset 0 0 0 3px rgba(255, 196, 71, 0.06), 0 0 18px rgba(220, 157, 38, 0.14);
 }
+.trace-logo { width: 46px; height: 46px; overflow: visible; }
+.trace-shield { fill: none; stroke: url(#trace-gold); stroke-linejoin: round; }
+.trace-shield.outer { stroke-width: 2.2; }
+.trace-shield.inner { stroke-width: 1; opacity: .58; }
+.trace-one { fill: url(#trace-gold); }
+.trace-lens { fill: rgba(246, 188, 67, .07); stroke: url(#trace-gold); stroke-width: 1.2; }
+.trace-core { fill: none; stroke: url(#trace-gold); stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.trace-face { fill: none; stroke: url(#trace-face); stroke-width: 1.35; stroke-linejoin: round; }
+.trace-c { fill: none; stroke: #f4bd48; stroke-width: 1.7; stroke-linecap: round; }
+.trace-mesh { fill: none; stroke: #e7a633; stroke-width: .65; stroke-linecap: round; opacity: .8; }
+.trace-orbit { fill: none; stroke: url(#trace-gold); stroke-width: 1.5; stroke-linecap: round; }
+.trace-orbit.halo { stroke-width: .8; opacity: .7; }
+.trace-node { fill: #f4bd48; stroke: #17110a; stroke-width: 1.5; }
+.trace-node.small { stroke-width: 1; }
+.trace-spark { fill: none; stroke: #f7c75b; stroke-width: 1.2; stroke-linecap: round; }
 .brandblock { display: flex; align-items: center; gap: 12px; }
 .brandblock .name {
   font-family: var(--font-display);
-  font-size: 19px;
-  letter-spacing: 0.01em;
+  font-size: 23px;
+  letter-spacing: 0.015em;
+  font-weight: 650;
+  color: #f4f0e8;
 }
-.brandblock .name b { font-weight: 600; color: var(--gold); font-style: italic; }
-.brandblock .tag { display: block; color: var(--muted); font-size: 11px; margin-top: 2px; }
+.brandblock .name span { color: var(--gold); }
+.brandblock .tag { display: block; color: #c7c4bd; font-size: 10px; letter-spacing: 0.21em; margin-top: 3px; }
+.brandblock .tag i { color: var(--gold); font-style: normal; padding: 0 4px; }
 .site-nav nav { display: flex; gap: 26px; margin-left: 20px; }
 .site-nav nav a {
   text-decoration: none;

@@ -2,14 +2,14 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "TraceChain AI | Evidence intelligence",
+  title: "ORYNEX AI | Evidence intelligence",
   description: "Authorized face discovery and blockchain evidence verification."
 };
 
 const themeInitScript = `
 (function () {
   try {
-    var stored = localStorage.getItem("tracechain-theme");
+    var stored = localStorage.getItem("orynex-theme");
     var theme = stored === "light" || stored === "dark" ? stored : "dark";
     document.documentElement.setAttribute("data-theme", theme);
   } catch (e) {}
