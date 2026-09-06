@@ -81,27 +81,12 @@ function TraceLogo() {
           <stop offset="0.32" stopColor="#f7bd43" />
           <stop offset="1" stopColor="#b56c13" />
         </linearGradient>
-        <linearGradient id="trace-face" x1="24" y1="17" x2="42" y2="48" gradientUnits="userSpaceOnUse">
-          <stop stopColor="#fff3bc" />
-          <stop offset="1" stopColor="#c47b1d" />
-        </linearGradient>
-        <filter id="trace-glow" x="-40%" y="-40%" width="180%" height="180%">
-          <feGaussianBlur stdDeviation="1.1" result="blur" />
-          <feMerge><feMergeNode in="blur" /><feMergeNode in="SourceGraphic" /></feMerge>
-        </filter>
       </defs>
-      <path className="trace-shield outer" d="M32 4 54 16v16c-1.8 13-9.2 23.2-22 29C19.2 55.2 11.8 45 10 32V16L32 4Z" />
-      <path className="trace-orbit halo" d="M14 36c1-14 12-24 25-22 10 1.6 16 10.8 13 19.8-3.5 10.8-17.4 16-28.4 10.6" filter="url(#trace-glow)" />
-      <circle className="trace-lens" cx="32" cy="31" r="11.5" />
-      <path className="trace-core" d="m25 25 7 12 7-12m-3.2 7.2h-7.6" />
-      <path className="trace-face" d="M39 21.2c3.8 2 5.3 5.4 4.6 9.1l-1.8 1.4.7 2-2.1 1.1.1 2-2.7 1.4-2.1-1.8-1.4-3.8 1.4-6.4 3.3-5Z" />
-      <path className="trace-mesh" d="m35 26 5 2m-6 3 6 1m-5 3 4 1m-3-10 3 7" />
-      <path className="trace-orbit" d="M4 43c8.8 11.2 23 13.4 36.4 5.8C52.4 41.9 59.6 29.8 53 19" filter="url(#trace-glow)" />
-      <circle className="trace-node" cx="7" cy="42" r="3" />
-      <circle className="trace-node" cx="20" cy="53" r="2.6" />
-      <circle className="trace-node" cx="51" cy="18" r="2.7" />
-      <circle className="trace-node small" cx="27" cy="49" r="1.7" />
-      <path className="trace-spark" d="m10 20 3 3m-3 0 3-3" />
+      <path className="trace-shield outer" d="M32 5.5 51.5 16v14.2c0 12.5-7.2 22-19.5 28.3C19.7 52.2 12.5 42.7 12.5 30.2V16L32 5.5Z" />
+      <path className="trace-orbit" d="M17.5 34.5c1-8.4 7.1-14.8 14.5-14.8 8 0 14.3 6.5 14.3 14.7 0 8.1-6.3 14.7-14.3 14.7-4.6 0-8.7-2.2-11.4-5.8" />
+      <circle className="trace-lens" cx="32" cy="34.3" r="8.2" />
+      <path className="trace-core" d="M26.8 34.7 30.7 38.5 38.2 30" />
+      <path className="trace-spark" d="M48.5 18.5v5m-2.5-2.5h5" />
     </svg>
   );
 }
