@@ -347,6 +347,7 @@ export default function Dashboard() {
 
       <section className="workspace">
         <div className="col">
+          <div className="col-sticky">
           <div className="col-head">
             <div><span className="idx">01</span><h2>Face scan</h2></div>
             <ScanFace size={20} color="var(--gold)" />
@@ -395,6 +396,7 @@ export default function Dashboard() {
               </div>
             </div>
           )}
+          </div>
         </div>
 
         <div className="col">
@@ -444,6 +446,7 @@ export default function Dashboard() {
         </div>
 
         <div className="col">
+          <div className="col-sticky">
           <div className="col-head">
             <div><span className="idx">03</span><h2>Evidence &amp; verification</h2></div>
           </div>
@@ -469,6 +472,7 @@ export default function Dashboard() {
               <a className="jump-link" href="#results">View full evidence report <ArrowRight size={13} /></a>
             </div>
           )}
+          </div>
         </div>
       </section>
 

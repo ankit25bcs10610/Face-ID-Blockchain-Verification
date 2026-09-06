@@ -230,6 +230,13 @@ code, pre { font-family: var(--font-mono); }
   border-left: 1px solid var(--line);
 }
 .col:first-child { border-left: none; }
+
+/* The trace is much taller than the panels beside it, so those follow the
+   scroll instead of leaving the sides empty. The column itself keeps its
+   full height so the dividers stay unbroken. */
+@media (min-width: 1101px) {
+  .col-sticky { position: sticky; top: 28px; }
+}
 .col-head { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 20px; }
 .col-head .idx { font-family: var(--font-mono); color: var(--gold); font-size: 12px; }
 .col-head h2 { font-family: var(--font-display); font-weight: 500; font-size: 21px; margin: 6px 0 0; }
