@@ -1,7 +1,9 @@
 """Secure request handling around the existing TraceChain pipeline."""
 
+import asyncio
 import json
 import tempfile
+from collections.abc import AsyncIterator
 from pathlib import Path
 from typing import Any
 
@@ -111,6 +113,70 @@ async def run_uploaded_pipeline(upload: UploadFile, top_k: int | None = None, th
             raise ApiFailure("BLOCKCHAIN_UNAVAILABLE", "Blockchain registration could not be completed.", 503) from exc
         raise ApiFailure("PIPELINE_FAILED", message, 422) from exc
     finally:
+        path.unlink(missing_ok=True)
+
+
+def _failure_for(exc: Exception) -> ApiFailure:
+    """Map a pipeline exception onto the same API error contract as /pipeline/run."""
+    if isinstance(exc, ApiFailure):
+        return exc
+    if isinstance(exc, (FileNotFoundError, SearchError)):
+        return ApiFailure("SEARCH_UNAVAILABLE", str(exc), 503)
+    message = str(exc)
+    if "No candidate posts" in message or "No match" in message:
+        return ApiFailure("NO_MATCH_FOUND", message, 422)
+    if "blockchain" in message.lower() or "RPC" in message:
+        return ApiFailure("BLOCKCHAIN_UNAVAILABLE", "Blockchain registration could not be completed.", 503)
+    return ApiFailure("PIPELINE_FAILED", message, 422)
+
+
+async def stream_uploaded_pipeline(
+    upload: UploadFile,
+    top_k: int | None = None,
+    threshold: float | None = None,
+    metadata: str | None = None,
+) -> AsyncIterator[dict[str, Any]]:
+    """Run the pipeline in a worker thread, yielding each stage as it happens."""
+    path = await save_upload(upload)
+    query_metadata = _json_object(metadata)
+    from src.config import settings as runtime
+
+    loop = asyncio.get_running_loop()
+    queue: asyncio.Queue[dict[str, Any]] = asyncio.Queue()
+
+    def on_stage(name: str, status: str) -> None:
+        loop.call_soon_threadsafe(queue.put_nowait, {"type": "stage", "stage": name, "status": status})
+
+    def execute() -> dict[str, Any]:
+        return run_pipeline(
+            path,
+            top_k or runtime.TOP_K,
+            threshold if threshold is not None else runtime.MATCH_THRESHOLD,
+            query_metadata,
+            on_stage=on_stage,
+        )
+
+    task = asyncio.create_task(asyncio.to_thread(execute))
+    try:
+        while True:
+            drain = asyncio.ensure_future(queue.get())
+            done, _ = await asyncio.wait({drain, task}, return_when=asyncio.FIRST_COMPLETED)
+            if drain in done:
+                yield drain.result()
+                continue
+            drain.cancel()
+            # The run finished; emit anything still queued, then the outcome.
+            while not queue.empty():
+                yield queue.get_nowait()
+            try:
+                yield {"type": "result", "result": _pipeline_result(task.result())}
+            except Exception as exc:  # noqa: BLE001 - mapped onto the API error contract
+                failure = _failure_for(exc)
+                yield {"type": "error", "error": {"code": failure.code, "message": failure.message}}
+            return
+    finally:
+        if not task.done():
+            task.cancel()
         path.unlink(missing_ok=True)
 
 

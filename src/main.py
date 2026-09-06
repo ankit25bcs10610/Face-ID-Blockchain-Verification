@@ -49,15 +49,30 @@ def run_pipeline(
     query_metadata: dict | None = None,
     blockchain_register=None,
     evidence_reader=None,
+    on_stage=None,
 ) -> dict:
-    """Run every pipeline stage and return a serializable execution result."""
+    """Run every pipeline stage and return a serializable execution result.
+
+    ``on_stage`` is an optional callback invoked as ``on_stage(name, status)``
+    when each stage starts, completes, or fails, so a caller can report live
+    progress while the run is still in flight.
+    """
     image_path = Path(image_path)
     from src.config import settings
     settings.validate()
     pipeline_id = str(uuid.uuid4())
 
+    def report(name: str, status: str) -> None:
+        if on_stage is None:
+            return
+        try:
+            on_stage(name, status)
+        except Exception:
+            logger.warning("pipeline_stage_callback_failed stage=%s status=%s", name, status)
+
     def execute_stage(name: str, operation):
         logger.info("pipeline_stage pipeline_id=%s stage=%s status=started", pipeline_id, name)
+        report(name, "started")
         started = time.perf_counter()
         try:
             result = operation()
@@ -69,6 +84,7 @@ def run_pipeline(
                 (time.perf_counter() - started) * 1000,
                 type(exc).__name__,
             )
+            report(name, "failed")
             raise
         logger.info(
             "pipeline_stage pipeline_id=%s stage=%s status=completed duration_ms=%.2f",
@@ -76,6 +92,7 @@ def run_pipeline(
             name,
             (time.perf_counter() - started) * 1000,
         )
+        report(name, "completed")
         return result
     print("TRACECHAIN AI")
     print("Face Identification & Blockchain Verification")
@@ -108,7 +125,7 @@ def run_pipeline(
     print(f"  Candidates found: {len(candidates)}")
 
     print("[5/10] Ranking candidates...")
-    candidate = candidates[0]
+    candidate = execute_stage("CANDIDATE_RANKING", lambda: candidates[0])
     print(f"  Best candidate: {candidate.post_id} ({candidate.similarity_score:.3f})")
 
     print("[6/10] Verifying best match...")

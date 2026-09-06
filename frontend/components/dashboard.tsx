@@ -21,7 +21,7 @@ import {
 } from "lucide-react";
 import { ChangeEvent, DragEvent, useEffect, useRef, useState } from "react";
 import SiteNav from "@/components/site-nav";
-import { runPipeline } from "@/lib/api";
+import { runPipelineStreamed } from "@/lib/api";
 import { platformFor } from "@/lib/platform";
 import type { Candidate, PipelineResponse, PipelineStage, StageState } from "@/lib/types";
 
@@ -30,13 +30,27 @@ const stageLabels = [
   ["detection", "Face detection"],
   ["embedding", "Face embedding"],
   ["discovery", "Content discovery"],
-  ["vector", "Vector similarity search"],
+  ["ranking", "Candidate ranking"],
   ["matching", "Match verification"],
   ["evidence", "Evidence generation"],
   ["hash", "SHA-256 hashing"],
   ["chain", "Blockchain registration"],
   ["reverify", "Re-verification"]
 ] as const;
+
+// Backend stage names, in the order the pipeline emits them.
+const STAGE_INDEX_BY_NAME: Record<string, number> = {
+  IMAGE_VALIDATION: 0,
+  FACE_DETECTION: 1,
+  EMBEDDING_GENERATION: 2,
+  CONTENT_DISCOVERY: 3,
+  CANDIDATE_RANKING: 4,
+  MATCH_VERIFICATION: 5,
+  EVIDENCE_GENERATION: 6,
+  HASH_GENERATION: 7,
+  BLOCKCHAIN_REGISTRATION: 8,
+  RE_VERIFICATION: 9
+};
 
 const initialStages: PipelineStage[] = stageLabels.map(([id, label]) => ({ id, label, state: "pending" }));
 
@@ -137,10 +151,21 @@ export default function Dashboard() {
   const run = async () => {
     if (!file || running) return;
     setRunning(true); setError(null); setNotice(null); setResult(null);
-    setStages(initialStages.map((stage, index) => ({ ...stage, state: index === 0 ? "processing" : "pending" })));
+    setStages(initialStages);
     setRunsThisSession((count) => count + 1);
     try {
-      const response = await runPipeline(file);
+      const response = await runPipelineStreamed(file, (event) => {
+        const index = STAGE_INDEX_BY_NAME[event.stage];
+        if (index === undefined) return;
+        setStages((current) =>
+          current.map((stage, position) => {
+            if (position !== index) return stage;
+            if (event.status === "started") return { ...stage, state: "processing" };
+            if (event.status === "failed") return { ...stage, state: "failed" };
+            return { ...stage, state: "success" };
+          })
+        );
+      });
       setResult(response);
       setStages(initialStages.map((stage) => ({ ...stage, state: "success" })));
       if (response.match?.match) setMatchesThisSession((count) => count + 1);
@@ -150,16 +175,26 @@ export default function Dashboard() {
       const code = failure.code;
       const message = failure.message || "The pipeline request failed.";
 
-      if (code === "API_UNREACHABLE") {
-        setError(message);
-        setStages(initialStages);
-      } else if (code === "NO_MATCH_FOUND") {
+      if (code === "NO_MATCH_FOUND") {
         // Not a failure of the system: the search ran and found nothing public.
         setNotice(message);
-        setStages(stagesAfterFailure(3));
       } else {
         setError(message);
-        setStages(stagesAfterFailure(code && code in FAILED_STAGE_BY_CODE ? FAILED_STAGE_BY_CODE[code] : 0));
+      }
+
+      if (code === "API_UNREACHABLE") {
+        setStages(initialStages);
+      } else {
+        // The stream already marked stages as they happened; only fall back to
+        // inferring from the error code if nothing streamed through.
+        const failedIndex = code && code in FAILED_STAGE_BY_CODE ? FAILED_STAGE_BY_CODE[code] : 0;
+        setStages((current) => {
+          if (current.every((stage) => stage.state === "pending")) return stagesAfterFailure(failedIndex);
+          const stopped = current.findIndex((stage) => stage.state === "processing" || stage.state === "pending");
+          return current.map((stage, index) =>
+            index === stopped ? { ...stage, state: "failed" } : stage
+          );
+        });
       }
     } finally { setRunning(false); }
   };
