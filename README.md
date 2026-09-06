@@ -10,6 +10,16 @@ The platform is evidence-first: scores come from the running pipeline, search re
 
 ## How it works
 
+### System architecture
+
+The following architecture shows how an authorized face scan moves through the ORYNEX AI stack, from the Next.js interface and FastAPI layer through search, evidence generation, and blockchain verification.
+
+![ORYNEX AI system architecture](assets/orynex-system-architecture.png)
+
+<sub>Architecture diagram: input, frontend, API, external search sources, AI processing, data and storage, blockchain registration, and verifiable output.</sub>
+
+### Runtime flow
+
 ```text
 Authorized image → validation → InsightFace + ArcFace embedding
                  → live reverse-image search or authorized local corpus
