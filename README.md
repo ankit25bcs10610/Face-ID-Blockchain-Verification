@@ -265,3 +265,7 @@ Unit tests use controlled doubles only at external model, FAISS, and blockchain 
 - [ ] Run the pipeline successfully
 - [ ] Run the tampering demonstration
 - [ ] Record the terminal demonstration
+
+## Contributor
+
+- [Ankit Pandey](https://github.com/ankit25bcs10610) - Project creator and maintainer
