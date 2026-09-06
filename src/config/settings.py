@@ -51,6 +51,10 @@ CONTRACT_ADDRESS = os.getenv("CONTRACT_ADDRESS", "")
 CONTRACT_ARTIFACT_PATH = os.getenv("CONTRACT_ARTIFACT_PATH", "build/EvidenceRegistry.json")
 CHAIN_ID = int(os.getenv("CHAIN_ID", "0"))
 BLOCKCHAIN_MODE = os.getenv("BLOCKCHAIN_MODE", "local").strip().lower()
+API_HOST = os.getenv("API_HOST", "127.0.0.1")
+API_PORT = int(os.getenv("API_PORT", "8000"))
+ALLOWED_ORIGINS = tuple(origin.strip() for origin in os.getenv("ALLOWED_ORIGINS", "").split(",") if origin.strip())
+API_MAX_UPLOAD_BYTES = int(os.getenv("API_MAX_UPLOAD_BYTES", str(10 * 1024 * 1024)))
 
 
 def validate() -> None:
@@ -66,3 +70,5 @@ def validate() -> None:
         raise ValueError("Face dimensions must be positive and face confidence must be between zero and one")
     if BLOCKCHAIN_MODE not in {"local", "rpc"}:
         raise ValueError("BLOCKCHAIN_MODE must be either local or rpc")
+    if API_PORT <= 0 or API_MAX_UPLOAD_BYTES <= 0:
+        raise ValueError("API_PORT and API_MAX_UPLOAD_BYTES must be greater than zero")

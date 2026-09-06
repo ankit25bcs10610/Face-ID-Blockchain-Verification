@@ -35,3 +35,9 @@ build/*
 .vscode/
 *.log
 *.ses
+
+# Frontend build and dependency output
+frontend/node_modules/
+frontend/.next/
+frontend/.env.local
+frontend/.env.*.local

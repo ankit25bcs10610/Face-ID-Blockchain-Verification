@@ -26,6 +26,8 @@ Authorized face image
 - [Configuration](#configuration)
 - [Dataset and Indexing](#authorized-dataset-and-indexing)
 - [Blockchain Deployment](#blockchain-deployment)
+- [Frontend](#frontend)
+- [FastAPI Backend](#fastapi-backend)
 - [Running the Pipeline](#running-the-pipeline)
 - [Evidence and Tampering](#evidence-and-tampering)
 - [Testing](#testing)
@@ -86,6 +88,9 @@ src/
   verification/                 # Match scoring, evidence, hashing
   blockchain/                   # RPC client, registry, re-verification
   config/                       # Environment-backed settings
+  api/                          # FastAPI routes, schemas, errors, middleware
+services/
+  pipeline_service.py           # Secure API adapter around the core pipeline
   main.py                       # End-to-end command-line pipeline
 tests/                          # Unit and injected-boundary integration tests
 ```
@@ -235,6 +240,67 @@ python3 -m pytest -q
 The suite covers image validation, detection behavior, embedding normalization, index generation, FAISS-result mapping, ranking, confidence scoring, canonical JSON, hashing, evidence persistence, tampering detection, and injected-boundary pipeline integration.
 
 Unit tests use controlled doubles only at external model, FAISS, and blockchain boundaries. They do not claim a live transaction. A live end-to-end validation needs a populated authorized dataset, InsightFace runtime, FAISS installation, reachable EVM node, deployed contract, and funded wallet.
+
+## Frontend
+
+The `frontend/` directory contains the TraceChain AI operator console. It is a Next.js App Router application written in TypeScript with a custom responsive visual system, Framer Motion transitions, and Lucide icons. The interface is intentionally data-driven: candidate posts, confidence scores, evidence hashes, transaction details, and verdicts are rendered only from API responses.
+
+### Run the frontend
+
+```bash
+cd frontend
+npm install
+cp .env.example .env.local
+npm run dev
+```
+
+For a production build:
+
+```bash
+npm run build
+npm start
+```
+
+Configure `NEXT_PUBLIC_API_URL` in `frontend/.env.local` with the URL of the FastAPI service, plus endpoint variables if the service uses different routes. The client currently calls the configured health endpoint and pipeline endpoint, defaulting to `/health` and `/pipeline/run` respectively.
+
+### Backend boundary
+
+This repository currently contains the Python CLI/core pipeline, not a FastAPI server. Until an API adapter is added and started, the frontend will correctly show the API and blockchain as unavailable and will not display fabricated runtime results. The UI is ready to consume the configured JSON response from the existing pipeline contract once that adapter exists.
+
+### Available pages
+
+- `/` and `/dashboard`: upload an authorized face scan, run the configured pipeline endpoint, and inspect returned match, evidence, blockchain, and re-verification data.
+- `/evidence`: locally inspect a selected evidence JSON file without modifying it or sending it anywhere.
+- `/verify`: submit an evidence JSON file to the configured verification endpoint.
+
+The frontend does not provide a fake demo mode. With no API configured, its unavailable and error states are the expected behavior.
+
+## FastAPI Backend
+
+The API adapter is available at `src/api/main.py` and delegates execution to the existing core modules. It does not duplicate face processing, FAISS search, evidence hashing, blockchain registration, or re-verification logic.
+
+### Run the API
+
+Install the API dependencies from the repository root, then start Uvicorn:
+
+```bash
+pip install -r requirements.txt
+python -m src.api
+```
+
+Swagger UI is available at `http://127.0.0.1:8000/docs` when the service is running. The host, port, CORS origins, and upload limit are configured through `API_HOST`, `API_PORT`, `ALLOWED_ORIGINS`, and `API_MAX_UPLOAD_BYTES`.
+
+### API endpoints
+
+| Method | Route | Purpose |
+| --- | --- | --- |
+| `GET` | `/health` | Reports API, InsightFace dependency, FAISS index, and blockchain status. |
+| `POST` | `/face/analyze` | Validates an uploaded image and returns actual face-processing diagnostics. |
+| `POST` | `/pipeline/run` | Executes the existing end-to-end pipeline with an uploaded image. |
+| `POST` | `/search` | Searches the configured authorized FAISS dataset using a supplied 512-dimensional embedding. |
+| `POST` | `/verify` | Canonicalizes uploaded evidence, recreates its hash, and compares it with the blockchain record. |
+
+Image uploads are written to unique temporary files, restricted to configured extensions and size, and deleted after processing. API errors use `{ "error": { "code": "...", "message": "..." } }` without returning stack traces or secrets.
 
 ## Security and Limitations
 
