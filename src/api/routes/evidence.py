@@ -48,6 +48,7 @@ def list_evidence() -> dict[str, Any]:
             "final_confidence": record.get("final_confidence"),
             "face_similarity": record.get("face_similarity"),
             "image_similarity": record.get("image_similarity"),
+            "query_image_hash": record.get("query_image_hash"),
             "verification_timestamp": record.get("verification_timestamp"),
             "has_query_image": bool(media.get("query_image")),
             "has_matched_image": bool(media.get("matched_image")),

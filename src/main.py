@@ -151,6 +151,7 @@ def run_pipeline(
             threshold=threshold,
             pipeline_id=pipeline_id,
             query_image_path=image_path,
+            query_image_hash=_image_hash(image_path),
         )
         return evidence, save_evidence(evidence)
 

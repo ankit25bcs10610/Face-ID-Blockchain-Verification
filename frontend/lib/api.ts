@@ -64,6 +64,7 @@ export type EvidenceSummary = {
   face_similarity?: number | null;
   image_similarity?: number | null;
   verification_timestamp?: string | null;
+  query_image_hash?: string | null;
   has_query_image?: boolean;
   has_matched_image?: boolean;
 };

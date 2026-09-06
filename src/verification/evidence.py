@@ -59,6 +59,7 @@ def create_evidence(
     threshold: float | None = None,
     pipeline_id: str | None = None,
     query_image_path: str | Path | None = None,
+    query_image_hash: str | None = None,
 ) -> dict:
     if not isinstance(result, MatchResult):
         raise EvidenceError("result must be a MatchResult")
@@ -81,6 +82,9 @@ def create_evidence(
         "caption": metadata.get("caption"),
         "timestamp": metadata.get("timestamp"),
         "image_hash": image_hash,
+        # Perceptual hash of the scanned face, so every record produced from
+        # the same input image can be grouped together.
+        "query_image_hash": query_image_hash,
         "face_similarity": result.face_similarity,
         "image_similarity": result.image_similarity,
         "metadata_consistency": result.metadata_consistency,

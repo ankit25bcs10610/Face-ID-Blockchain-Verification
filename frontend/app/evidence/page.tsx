@@ -1,6 +1,6 @@
 "use client";
 
-import { CircleAlert, ExternalLink, FileText, Hash, ImageOff, LoaderCircle, RefreshCw, ScanFace, ShieldCheck, Upload } from "lucide-react";
+import { ChevronDown, CircleAlert, ExternalLink, FileText, Hash, ImageOff, LoaderCircle, RefreshCw, ScanFace, ShieldCheck, Upload } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import SiteNav from "@/components/site-nav";
 import { evidenceMediaUrl, listEvidence, readEvidenceRecord, type EvidenceSummary } from "@/lib/api";
@@ -83,6 +83,45 @@ export default function EvidencePage() {
     );
   }, [records, query]);
 
+  /**
+   * Records produced from the same scanned image belong together: one scan can
+   * be run repeatedly and match a different source each time.
+   */
+  const groups = useMemo(() => {
+    const byScan = new Map<string, EvidenceSummary[]>();
+    for (const record of filtered) {
+      const key = record.query_image_hash || `single:${record.evidence_id}`;
+      const bucket = byScan.get(key);
+      if (bucket) bucket.push(record);
+      else byScan.set(key, [record]);
+    }
+    return Array.from(byScan, ([key, items]) => ({
+      key,
+      items,
+      best: items.reduce((top, item) => ((item.final_confidence ?? 0) > (top.final_confidence ?? 0) ? item : top), items[0])
+    }));
+  }, [filtered]);
+
+  // A group is open when it holds the selected record; the newest opens by default.
+  const openGroup = useMemo(() => {
+    const holding = groups.find((group) => group.items.some((item) => item.evidence_id === selectedId));
+    return holding?.key ?? groups[0]?.key ?? null;
+  }, [groups, selectedId]);
+
+  const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
+  const toggleGroup = (key: string, firstId: string) => {
+    if (openGroup === key && !collapsed.has(key)) {
+      setCollapsed((current) => new Set(current).add(key));
+      return;
+    }
+    setCollapsed((current) => {
+      const next = new Set(current);
+      next.delete(key);
+      return next;
+    });
+    setSelectedId(firstId);
+  };
+
   const withImages = useMemo(
     () => (records ?? []).filter((record) => record.has_matched_image || record.has_query_image).length,
     [records]
@@ -160,33 +199,56 @@ export default function EvidencePage() {
                 : "No records match that search."}
             </div>
           )}
-          {filtered.map((record) => {
-            const { Icon, label } = platformFor(record.post_url ?? record.platform ?? "");
+          {groups.map((group) => {
+            const expanded = openGroup === group.key && !collapsed.has(group.key);
+            const scanThumb = group.items.find((item) => item.has_query_image);
             return (
-              <button
-                key={record.evidence_id}
-                className={`record-card ${selectedId === record.evidence_id ? "active" : ""}`}
-                onClick={() => setSelectedId(record.evidence_id)}
-              >
-                <span className="record-thumb">
-                  {record.has_matched_image ? (
-                    <img src={evidenceMediaUrl(record.evidence_id, "match")} alt="" />
-                  ) : (
-                    <ImageOff size={16} />
-                  )}
-                </span>
-                <span className="record-body">
-                  <span className="record-top">
-                    <Icon size={13} />
-                    <span className="record-platform">{label}</span>
+              <div className={`scan-group ${expanded ? "open" : ""}`} key={group.key}>
+                <button className="scan-head" onClick={() => toggleGroup(group.key, group.best.evidence_id)}>
+                  <span className="record-thumb">
+                    {scanThumb ? <img src={evidenceMediaUrl(scanThumb.evidence_id, "query")} alt="" /> : <ScanFace size={16} />}
                   </span>
-                  <span className="record-id">{record.evidence_id.slice(0, 8)}…{record.evidence_id.slice(-4)}</span>
-                  <span className="record-meter">
-                    <span className="meter"><i style={{ width: `${Math.min(100, (record.final_confidence ?? 0) * 100)}%` }} /></span>
-                    <b>{percent(record.final_confidence)}</b>
+                  <span className="scan-title">
+                    <strong>Scan {group.key.startsWith("single:") ? group.best.evidence_id.slice(0, 8) : group.key.slice(0, 12)}</strong>
+                    <span>{group.items.length} {group.items.length === 1 ? "record" : "records"} · best {percent(group.best.final_confidence)}</span>
                   </span>
-                </span>
-              </button>
+                  <ChevronDown className="scan-chevron" size={15} />
+                </button>
+
+                {expanded && (
+                  <div className="scan-items">
+                    {group.items.map((record) => {
+                      const { Icon, label } = platformFor(record.post_url ?? record.platform ?? "");
+                      return (
+                        <button
+                          key={record.evidence_id}
+                          className={`record-card ${selectedId === record.evidence_id ? "active" : ""}`}
+                          onClick={() => setSelectedId(record.evidence_id)}
+                        >
+                          <span className="record-thumb">
+                            {record.has_matched_image ? (
+                              <img src={evidenceMediaUrl(record.evidence_id, "match")} alt="" />
+                            ) : (
+                              <ImageOff size={16} />
+                            )}
+                          </span>
+                          <span className="record-body">
+                            <span className="record-top">
+                              <Icon size={13} />
+                              <span className="record-platform">{label}</span>
+                            </span>
+                            <span className="record-id">{record.evidence_id.slice(0, 8)}…{record.evidence_id.slice(-4)}</span>
+                            <span className="record-meter">
+                              <span className="meter"><i style={{ width: `${Math.min(100, (record.final_confidence ?? 0) * 100)}%` }} /></span>
+                              <b>{percent(record.final_confidence)}</b>
+                            </span>
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
             );
           })}
         </aside>
