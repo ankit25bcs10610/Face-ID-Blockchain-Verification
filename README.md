@@ -31,7 +31,7 @@ Authorized face image
 - [Technology Stack](#technology-stack)
 - [Installation](#installation)
 - [Configuration](#configuration)
-- [Dataset and Indexing](#authorized-dataset-and-indexing)
+- [Dataset and FAISS Index](#authorized-dataset-and-faiss-index)
 - [Blockchain Deployment](#blockchain-deployment)
 - [Frontend](#frontend)
 - [FastAPI Backend](#fastapi-backend)
@@ -136,9 +136,13 @@ All runtime behavior is environment-backed. Copy `.env.example` to `.env`, then 
 
 The application validates top-k, thresholds, weights, detector dimensions, confidence limits, and blockchain mode before a run.
 
-## Authorized Dataset and Indexing
+## Authorized Dataset and FAISS Index
 
-Each authorized post belongs in its own directory:
+The default search provider is a local, consented dataset. The frontend status `FAISS INDEX UNAVAILABLE` means that the backend cannot find a generated index yet; it does not indicate a broken FAISS installation.
+
+### Add authorized posts
+
+Each post belongs in its own directory and must contain one supported image plus `metadata.json`:
 
 ```text
 data/posts/
@@ -147,7 +151,7 @@ data/posts/
     metadata.json
 ```
 
-`metadata.json` requires a non-empty `post_id`. The following fields are strongly recommended because they are preserved in evidence and can be used during metadata verification:
+`metadata.json` requires a unique, non-empty `post_id`. These fields are recommended because they are preserved in evidence and can participate in metadata verification:
 
 ```json
 {
@@ -159,12 +163,31 @@ data/posts/
 }
 ```
 
-This is a schema example, not a preselected result. The pipeline does not insert sample post data or preselect the winner.
+The example describes the file shape only. The pipeline does not insert sample posts, generate placeholder embeddings, or preselect a winner. Add only content that is owned, consented, or otherwise authorized for processing.
 
-Build the index:
+### Build the index
+
+From the repository root, run:
 
 ```bash
 python3 scripts/build_index.py
+```
+
+The builder validates each image, detects a face with InsightFace, generates a normalized 512-dimensional embedding, and performs a real FAISS `IndexFlatIP` build. A successful run creates:
+
+```text
+data/embeddings/embeddings.npy
+data/faiss/faces.index
+data/faiss/manifest.json
+data/faiss/index_metadata.json
+```
+
+Example success output:
+
+```text
+Indexed posts: 2
+Skipped posts: 0
+FAISS index: data/faiss/faces.index
 ```
 
 Optional artifact paths can be passed without source edits:
@@ -176,7 +199,15 @@ python3 scripts/build_index.py \
   --faiss-dir data/faiss
 ```
 
-The builder creates the embedding matrix, FAISS index, row-aligned candidate manifest, and versioned metadata. Invalid directories are reported and skipped. A build with no valid authorized records fails rather than fabricating embeddings or candidates.
+After building, restart FastAPI so its health check sees the generated artifact, then refresh the frontend:
+
+```bash
+python3 -m src.api
+```
+
+The System Posture panel should then report `FAISS INDEX CONNECTED`.
+
+Invalid post directories are reported and skipped. A build with no valid authorized records fails rather than fabricating embeddings or candidates. If a post is skipped, check that its image is supported, large enough, readable, and contains an allowed number of faces.
 
 ## Blockchain Deployment
 

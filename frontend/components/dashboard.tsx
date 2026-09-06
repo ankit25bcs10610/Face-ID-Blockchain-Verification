@@ -24,6 +24,7 @@ import {
   XCircle
 } from "lucide-react";
 import { ChangeEvent, DragEvent, useEffect, useMemo, useRef, useState } from "react";
+import Link from "next/link";
 import { getHealth, runPipeline } from "@/lib/api";
 import type { Candidate, ConnectionState, PipelineResponse, PipelineStage, StageState } from "@/lib/types";
 
@@ -81,13 +82,15 @@ export default function Dashboard() {
   const [error, setError] = useState<string | null>(null);
   const [apiState, setApiState] = useState<ConnectionState>("checking");
   const [chainState, setChainState] = useState<ConnectionState>("checking");
+  const [indexState, setIndexState] = useState<ConnectionState>("checking");
   const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     getHealth().then((health) => {
       setApiState(health.status === "healthy" || health.status === "degraded" ? "connected" : "disconnected");
       setChainState(health.blockchain?.connected || health.blockchain?.status === "connected" || health.components?.blockchain === "available" ? "connected" : "disconnected");
-    }).catch(() => { setApiState("disconnected"); setChainState("disconnected"); });
+      setIndexState(health.components?.search_service === "available" ? "connected" : "disconnected");
+    }).catch(() => { setApiState("disconnected"); setChainState("disconnected"); setIndexState("disconnected"); });
   }, []);
 
   useEffect(() => () => { if (preview) URL.revokeObjectURL(preview); }, [preview]);
@@ -133,6 +136,7 @@ export default function Dashboard() {
       <div className="ambient ambient-one" /><div className="ambient ambient-two" />
       <nav className="topbar">
         <div className="brand"><div className="brand-mark"><GitBranch size={19} /></div><div><strong>TRACECHAIN <span>AI</span></strong><small>Identify · Discover · Verify</small></div></div>
+        <div className="nav-links"><Link href="/dashboard">Dashboard</Link><Link href="/evidence">Evidence</Link><Link href="/verify">Verify</Link></div>
         <div className="top-status">
           <div className="status-pill"><i className={connectionClass(apiState)} /> API {connectionLabel(apiState)}</div>
           <div className="status-pill"><i className={connectionClass(chainState)} /> Chain {connectionLabel(chainState)}</div>
@@ -140,11 +144,13 @@ export default function Dashboard() {
       </nav>
 
       <section className="hero">
-        <div><p className="eyebrow"><Sparkles size={14} /> AUTHORIZED EVIDENCE INTELLIGENCE</p><h1>Faces to facts.<br /><em>On chain.</em></h1><p className="hero-copy">Process authorized visual evidence, discover matching content, and create tamper-evident verification records.</p></div>
+        <div><p className="eyebrow"><Sparkles size={14} /> AUTHORIZED EVIDENCE INTELLIGENCE</p><h1>Face discovery &amp;<br /><em>blockchain verification.</em></h1><p className="hero-copy">A consent-first workspace for processing visual evidence, finding authorized matches, and creating tamper-evident records.</p><div className="hero-actions"><a href="#workspace" className="hero-link">Start an analysis <ArrowUpRight size={15} /></a><span>Private by design · no fabricated runtime data</span></div></div>
         <div className="hero-orbit"><div className="orbit-core"><ShieldCheck size={30} /><span>TRUST<br />LAYER</span></div><div className="orbit orbit-a" /><div className="orbit orbit-b" /><span className="orbit-label label-a">AI</span><span className="orbit-label label-b">WEB3</span></div>
       </section>
 
-      <div className="workspace-grid">
+      <section className="posture-strip" aria-label="System posture"><div className="posture-intro"><span className="posture-pulse" />SYSTEM POSTURE</div><div className="posture-item"><span>REST API</span><b className={connectionClass(apiState)}>{connectionLabel(apiState)}</b></div><div className="posture-item"><span>EVM REGISTRY</span><b className={connectionClass(chainState)}>{connectionLabel(chainState)}</b></div><div className="posture-item"><span>FAISS INDEX</span><b className={connectionClass(indexState)}>{connectionLabel(indexState)}</b></div><div className="posture-note">Status is read from <code>/health</code></div></section>
+
+      <div className="workspace-grid" id="workspace">
         <section className="panel upload-panel">
           <div className="panel-heading"><div><p className="section-kicker">01 / INPUT</p><h2>Face scan</h2></div><ScanFace size={22} /></div>
           <div className={`dropzone ${dragging ? "dragging" : ""} ${preview ? "has-preview" : ""}`} onDragOver={(event) => { event.preventDefault(); setDragging(true); }} onDragLeave={() => setDragging(false)} onDrop={handleDrop} onClick={() => inputRef.current?.click()} role="button" tabIndex={0} onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") inputRef.current?.click(); }}>
