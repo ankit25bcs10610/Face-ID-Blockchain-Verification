@@ -1,32 +1,28 @@
 "use client";
 
-import { AnimatePresence, motion } from "framer-motion";
 import {
   Activity,
-  ArrowUpRight,
+  ArrowRight,
   Check,
-  CheckCircle2,
   CircleAlert,
   Copy,
-  Database,
   FileCheck2,
   Fingerprint,
-  GitBranch,
+  Hash,
   Image as ImageIcon,
   Link2,
   LoaderCircle,
   LockKeyhole,
   ScanFace,
   ShieldCheck,
-  Sparkles,
   UploadCloud,
-  X,
-  XCircle
+  X
 } from "lucide-react";
-import { ChangeEvent, DragEvent, useEffect, useMemo, useRef, useState } from "react";
-import Link from "next/link";
-import { getHealth, runPipeline } from "@/lib/api";
-import type { Candidate, ConnectionState, PipelineResponse, PipelineStage, StageState } from "@/lib/types";
+import { ChangeEvent, DragEvent, useEffect, useRef, useState } from "react";
+import SiteNav from "@/components/site-nav";
+import { runPipeline } from "@/lib/api";
+import { platformFor } from "@/lib/platform";
+import type { Candidate, PipelineResponse, PipelineStage, StageState } from "@/lib/types";
 
 const stageLabels = [
   ["validation", "Image validation"],
@@ -44,30 +40,39 @@ const stageLabels = [
 const initialStages: PipelineStage[] = stageLabels.map(([id, label]) => ({ id, label, state: "pending" }));
 
 function formatPercent(value?: number | null) {
-  return typeof value === "number" ? `${(value * 100).toFixed(1)}%` : "No data";
+  return typeof value === "number" ? `${(value * 100).toFixed(1)}%` : "—";
 }
 
 function display(value?: unknown) {
-  return value === undefined || value === null || value === "" ? "No data available" : String(value);
+  return value === undefined || value === null || value === "" ? "—" : String(value);
 }
 
-function metadata(candidate?: Candidate) {
+function metadataOf(candidate?: Candidate) {
   return candidate?.metadata ?? {};
 }
 
-function StageIcon({ state }: { state: StageState }) {
-  if (state === "processing") return <LoaderCircle className="spin" size={16} />;
-  if (state === "success") return <Check size={16} />;
-  if (state === "failed") return <X size={16} />;
-  return <span className="stage-dot" />;
+function StageDot({ state }: { state: StageState }) {
+  if (state === "processing") return <LoaderCircle className="spin" size={13} />;
+  if (state === "success") return <Check size={13} />;
+  if (state === "failed") return <X size={13} />;
+  return <span className="dot" />;
 }
 
-function CopyButton({ value }: { value?: string }) {
+function CopyIcon({ value }: { value?: string }) {
   const [copied, setCopied] = useState(false);
   if (!value) return null;
   return (
-    <button className="icon-button" aria-label="Copy value" onClick={() => void navigator.clipboard.writeText(value).then(() => { setCopied(true); setTimeout(() => setCopied(false), 1400); })}>
-      {copied ? <Check size={15} /> : <Copy size={15} />}
+    <button
+      className="icon-btn"
+      aria-label="Copy value"
+      onClick={() =>
+        void navigator.clipboard.writeText(value).then(() => {
+          setCopied(true);
+          setTimeout(() => setCopied(false), 1300);
+        })
+      }
+    >
+      {copied ? <Check size={13} /> : <Copy size={13} />}
     </button>
   );
 }
@@ -80,24 +85,16 @@ export default function Dashboard() {
   const [stages, setStages] = useState(initialStages);
   const [result, setResult] = useState<PipelineResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [apiState, setApiState] = useState<ConnectionState>("checking");
-  const [chainState, setChainState] = useState<ConnectionState>("checking");
-  const [indexState, setIndexState] = useState<ConnectionState>("checking");
+  const [runsThisSession, setRunsThisSession] = useState(0);
+  const [matchesThisSession, setMatchesThisSession] = useState(0);
+  const [evidenceThisSession, setEvidenceThisSession] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
-
-  useEffect(() => {
-    getHealth().then((health) => {
-      setApiState(health.status === "healthy" || health.status === "degraded" ? "connected" : "disconnected");
-      setChainState(health.blockchain?.connected || health.blockchain?.status === "connected" || health.components?.blockchain === "available" ? "connected" : "disconnected");
-      setIndexState(health.components?.search_service === "available" ? "connected" : "disconnected");
-    }).catch(() => { setApiState("disconnected"); setChainState("disconnected"); setIndexState("disconnected"); });
-  }, []);
 
   useEffect(() => () => { if (preview) URL.revokeObjectURL(preview); }, [preview]);
 
   const candidateResults = result?.search?.results ?? (result?.candidate ? [result.candidate] : []);
   const best = result?.candidate ?? candidateResults[0];
-  const bestMetadata = metadata(best);
+  const bestMetadata = metadataOf(best);
   const verdict = result?.reverification?.status ?? (result?.match?.match ? "MATCH VERIFIED" : result ? "NO MATCH" : null);
   const verdictTone = verdict === "VERIFIED" || verdict === "MATCH VERIFIED" ? "success" : verdict ? "danger" : "neutral";
 
@@ -117,66 +114,222 @@ export default function Dashboard() {
     if (!file || running) return;
     setRunning(true); setError(null); setResult(null);
     setStages(initialStages.map((stage, index) => ({ ...stage, state: index === 0 ? "processing" : "pending" })));
+    setRunsThisSession((count) => count + 1);
     try {
       const response = await runPipeline(file);
       setResult(response);
       setStages(initialStages.map((stage) => ({ ...stage, state: "success" })));
+      if (response.match?.match) setMatchesThisSession((count) => count + 1);
+      if (response.evidence_hash) setEvidenceThisSession((count) => count + 1);
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "The pipeline request failed.");
       setStages((current) => current.map((stage, index) => ({ ...stage, state: index === 0 ? "failed" : "pending" })));
     } finally { setRunning(false); }
   };
 
-  const connectionLabel = (state: ConnectionState) => state === "checking" ? "Checking" : state === "connected" ? "Connected" : "Unavailable";
-  const connectionClass = (state: ConnectionState) => state === "connected" ? "online" : state === "checking" ? "checking" : "offline";
-  const topCandidates = useMemo(() => candidateResults.slice(1), [candidateResults]);
-
   return (
-    <main className="app-shell">
-      <div className="ambient ambient-one" /><div className="ambient ambient-two" />
-      <nav className="topbar">
-        <div className="brand"><div className="brand-mark"><GitBranch size={19} /></div><div><strong>TRACECHAIN <span>AI</span></strong><small>Identify · Discover · Verify</small></div></div>
-        <div className="nav-links"><Link href="/dashboard">Dashboard</Link><Link href="/evidence">Evidence</Link><Link href="/verify">Verify</Link></div>
-        <div className="top-status">
-          <div className="status-pill"><i className={connectionClass(apiState)} /> API {connectionLabel(apiState)}</div>
-          <div className="status-pill"><i className={connectionClass(chainState)} /> Chain {connectionLabel(chainState)}</div>
-        </div>
-      </nav>
+    <main>
+      <SiteNav />
 
       <section className="hero">
-        <div><p className="eyebrow"><Sparkles size={14} /> AUTHORIZED EVIDENCE INTELLIGENCE</p><h1>Face discovery &amp;<br /><em>blockchain verification.</em></h1><p className="hero-copy">A consent-first workspace for processing visual evidence, finding authorized matches, and creating tamper-evident records.</p><div className="hero-actions"><a href="#workspace" className="hero-link">Start an analysis <ArrowUpRight size={15} /></a><span>Private by design · no fabricated runtime data</span></div></div>
-        <div className="hero-orbit"><div className="orbit-core"><ShieldCheck size={30} /><span>TRUST<br />LAYER</span></div><div className="orbit orbit-a" /><div className="orbit orbit-b" /><span className="orbit-label label-a">AI</span><span className="orbit-label label-b">WEB3</span></div>
+        <div>
+          <p className="kicker">Authorized evidence intelligence</p>
+          <h1>From a face scan to a <i>verifiable record</i>.</h1>
+          <p className="lede">
+            Upload an authorized image. TraceChain searches the open web for a genuine matching post,
+            re-verifies the match with its own face model, and seals the result on-chain.
+          </p>
+        </div>
+        <div className="hero-meta">
+          <div><strong>Live web search</strong>Google Lens, not a fixed dataset</div>
+          <div><strong>Local Ethereum chain</strong>Ganache · chain 1337</div>
+        </div>
       </section>
 
-      <section className="posture-strip" aria-label="System posture"><div className="posture-intro"><span className="posture-pulse" />SYSTEM POSTURE</div><div className="posture-item"><span>REST API</span><b className={connectionClass(apiState)}>{connectionLabel(apiState)}</b></div><div className="posture-item"><span>EVM REGISTRY</span><b className={connectionClass(chainState)}>{connectionLabel(chainState)}</b></div><div className="posture-item"><span>FAISS INDEX</span><b className={connectionClass(indexState)}>{connectionLabel(indexState)}</b></div><div className="posture-note">Status is read from <code>/health</code></div></section>
+      <section className="stat-strip">
+        <div className="stat"><div className="num">{runsThisSession}</div><div className="label">Scans run this session</div></div>
+        <div className="stat"><div className="num">{matchesThisSession}</div><div className="label">Matches confirmed</div></div>
+        <div className="stat"><div className="num">{evidenceThisSession}</div><div className="label">Evidence records sealed</div></div>
+        <div className="stat"><div className="num">{verdict ?? "Ready"}</div><div className="label">Latest verdict</div></div>
+      </section>
 
-      <div className="workspace-grid" id="workspace">
-        <section className="panel upload-panel">
-          <div className="panel-heading"><div><p className="section-kicker">01 / INPUT</p><h2>Face scan</h2></div><ScanFace size={22} /></div>
-          <div className={`dropzone ${dragging ? "dragging" : ""} ${preview ? "has-preview" : ""}`} onDragOver={(event) => { event.preventDefault(); setDragging(true); }} onDragLeave={() => setDragging(false)} onDrop={handleDrop} onClick={() => inputRef.current?.click()} role="button" tabIndex={0} onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") inputRef.current?.click(); }}>
-            {preview ? <><img src={preview} alt="Selected face scan preview" /><div className="preview-overlay"><span><FileCheck2 size={15} /> {file?.name}</span><b>{file ? `${(file.size / 1024 / 1024).toFixed(2)} MB` : ""}</b></div></> : <><div className="upload-icon"><UploadCloud size={25} /></div><strong>Drop your authorized scan here</strong><span>or click to browse your files</span><small>JPG · JPEG · PNG <b>·</b> max 10 MB</small></>}
+      <section className="workspace">
+        <div className="col">
+          <div className="col-head">
+            <div><span className="idx">01</span><h2>Face scan</h2></div>
+            <ScanFace size={20} color="var(--gold)" />
+          </div>
+          <div
+            className={`dropzone ${dragging ? "dragging" : ""} ${preview ? "has-preview" : ""}`}
+            onDragOver={(event) => { event.preventDefault(); setDragging(true); }}
+            onDragLeave={() => setDragging(false)}
+            onDrop={handleDrop}
+            onClick={() => inputRef.current?.click()}
+            role="button" tabIndex={0}
+            onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") inputRef.current?.click(); }}
+          >
+            {preview ? (
+              <>
+                <img src={preview} alt="Selected face scan preview" />
+                <div className="preview-tag"><span><FileCheck2 size={13} /> {file?.name}</span><b>{file ? `${(file.size / 1024 / 1024).toFixed(2)} MB` : ""}</b></div>
+              </>
+            ) : (
+              <>
+                <UploadCloud className="icon" size={26} />
+                <strong>Drop your authorized scan here</strong>
+                <span>or click to browse your files</span>
+                <small>JPG · PNG &nbsp;·&nbsp; max 10 MB</small>
+              </>
+            )}
             <input ref={inputRef} type="file" accept="image/jpeg,image/png" onChange={handleInput} hidden />
           </div>
-          {file && <button className="remove-button" onClick={(event) => { event.stopPropagation(); removeFile(); }}><X size={14} /> Remove scan</button>}
-          <div className="consent-note"><LockKeyhole size={14} /><span>Authorized content only. Your scan is processed by the configured backend.</span></div>
-          <button className="primary-button" disabled={!file || running} onClick={run}>{running ? <><LoaderCircle className="spin" size={17} /> Processing pipeline...</> : <><Activity size={17} /> Run TraceChain pipeline <ArrowUpRight size={16} /></>}</button>
-          {error && <div className="error-box"><CircleAlert size={17} /><span>{error}</span></div>}
-        </section>
-
-        <section className="panel pipeline-panel"><div className="panel-heading"><div><p className="section-kicker">02 / PIPELINE</p><h2>Live trace</h2></div><span className="run-id">{result?.pipeline_id ? `RUN ${result.pipeline_id.slice(0, 8).toUpperCase()}` : "AWAITING INPUT"}</span></div><div className="pipeline-list">{stages.map((stage, index) => <div className={`pipeline-stage ${stage.state}`} key={stage.id}><div className="stage-index">{String(index + 1).padStart(2, "0")}</div><div className="stage-line"><span className="stage-icon"><StageIcon state={stage.state} /></span><span>{stage.label}</span></div><span className="stage-state">{stage.state}</span></div>)}</div></section>
-      </div>
-
-      <AnimatePresence>{result && <motion.section className="results-section" initial={{ opacity: 0, y: 18 }} animate={{ opacity: 1, y: 0 }}><div className="results-header"><div><p className="eyebrow"><CheckCircle2 size={14} /> RUNTIME RESULTS</p><h2>Evidence report</h2></div><span className={`verdict-badge ${verdictTone}`}>{verdict ?? "No verdict"}</span></div>
-        <div className="results-grid">
-          <div className="result-card face-result"><div className="card-title"><ScanFace size={17} /><span>Face analysis</span></div>{preview ? <img className="result-thumb" src={preview} alt="Input face" /> : <div className="empty-thumb"><ImageIcon size={23} /></div>}<div className="metric-row"><span>Face detected</span><b>{result.match ? "Returned by API" : "No data available"}</b></div><div className="metric-row"><span>Embedding</span><b>{result.search ? "Generated by API" : "No data available"}</b></div></div>
-          <div className="result-card"><div className="card-title"><Database size={17} /><span>Top match</span></div>{best ? <><div className="candidate-title"><strong>{display(best.post_id)}</strong><span>{formatPercent(best.similarity_score)}</span></div><p className="caption">{display(bestMetadata.caption)}</p><div className="metric-row"><span>Provider</span><b>{display(result.search?.provider)}</b></div><div className="metric-row"><span>Source</span><b>{display(bestMetadata.platform)}</b></div><div className="metric-row"><span>Published</span><b>{display(bestMetadata.timestamp)}</b></div></> : <div className="empty-state">No candidate data returned.</div>}</div>
-          <div className={`result-card verdict-card ${verdictTone}`}><div className="card-title"><ShieldCheck size={17} /><span>Match analysis</span></div><div className="confidence-value">{formatPercent(result.match?.confidence)}</div><span className="confidence-label">final confidence</span><div className="signal"><span>Face similarity</span><div><i style={{ width: `${Math.min(100, (result.match?.face_similarity ?? 0) * 100)}%` }} /><b>{formatPercent(result.match?.face_similarity)}</b></div></div><div className="signal"><span>Image similarity</span><div><i style={{ width: `${Math.min(100, (result.match?.image_similarity ?? 0) * 100)}%` }} /><b>{formatPercent(result.match?.image_similarity)}</b></div></div><div className="signal"><span>Metadata consistency</span><div><i style={{ width: `${Math.min(100, (result.match?.metadata_consistency ?? 0) * 100)}%` }} /><b>{formatPercent(result.match?.metadata_consistency)}</b></div></div></div>
+          {file && <button className="remove-scan" onClick={(event) => { event.stopPropagation(); removeFile(); }}><X size={13} /> Remove scan</button>}
+          <div className="consent-line"><LockKeyhole size={14} /><span>Authorized content only. To search the web, this image is briefly hosted at a public URL so it can be fetched — it is not kept private during that step.</span></div>
+          <button className="run-btn" disabled={!file || running} onClick={run}>
+            {running ? <><LoaderCircle className="spin" size={16} /> Processing pipeline…</> : <><Activity size={16} /> Run TraceChain pipeline</>}
+          </button>
+          {error && <div className="error-line"><CircleAlert size={15} /><span>{error}</span></div>}
         </div>
-        <div className="results-grid lower-grid"><div className="result-card evidence-card"><div className="card-title"><Fingerprint size={17} /><span>Cryptographic evidence</span></div><div className="data-line"><span>Evidence ID</span><div>{display(result.evidence?.evidence_id)} <CopyButton value={typeof result.evidence?.evidence_id === "string" ? result.evidence.evidence_id : undefined} /></div></div><div className="data-line"><span>Pipeline ID</span><div>{display(result.pipeline_id)} <CopyButton value={result.pipeline_id} /></div></div><div className="hash-box"><small>SHA-256 fingerprint</small><code>{display(result.evidence_hash)}</code><CopyButton value={result.evidence_hash} /></div></div><div className="result-card chain-card"><div className="card-title"><Link2 size={17} /><span>Blockchain record</span></div><div className="data-line"><span>Contract</span><div>{display(result.blockchain?.contract_address)} <CopyButton value={result.blockchain?.contract_address} /></div></div><div className="data-line"><span>Transaction</span><div>{display(result.blockchain?.transaction_hash)} <CopyButton value={result.blockchain?.transaction_hash} /></div></div><div className="data-line"><span>Block</span><div>{display(result.blockchain?.block_number)}</div></div><div className="data-line"><span>Timestamp</span><div>{display(result.blockchain?.timestamp)}</div></div></div></div>
-        {topCandidates.length > 0 && <div className="candidate-strip"><div className="card-title"><Database size={17} /><span>Other candidates · {topCandidates.length}</span></div>{topCandidates.map((item) => <div className="candidate-row" key={item.post_id}><span>{display(item.post_id)}</span><b>{formatPercent(item.similarity_score)}</b><small>{display(item.metadata?.platform)}</small></div>)}</div>}
-      </motion.section>}</AnimatePresence>
 
-      <footer><span><span className="footer-mark">TC</span> TRACECHAIN AI</span><span>Authorized evidence infrastructure <b>·</b> no fabricated runtime data</span><span>v1.0 / LOCAL CORE</span></footer>
+        <div className="col">
+          <div className="col-head">
+            <div><span className="idx">02</span><h2>Live trace</h2></div>
+            <span className="col-head tag" style={{ padding: 0 }}>
+              <span className="tag">{result?.pipeline_id ? `Run ${result.pipeline_id.slice(0, 8)}` : "Awaiting input"}</span>
+            </span>
+          </div>
+          <div className="trace-list">
+            {stages.map((stage, index) => (
+              <div className={`trace-row ${stage.state}`} key={stage.id}>
+                <span className="n">{String(index + 1).padStart(2, "0")}</span>
+                <span style={{ display: "flex", alignItems: "center", gap: 9 }}>
+                  <StageDot state={stage.state} /> {stage.label}
+                </span>
+                <span className="state">{stage.state}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div className="col">
+          <div className="col-head">
+            <div><span className="idx">03</span><h2>Evidence &amp; verification</h2></div>
+          </div>
+          {!result ? (
+            <div className="output-empty">
+              <ShieldCheck className="icon" size={30} />
+              <strong>Run a scan to generate evidence</strong>
+              <p>A verified match, its source, a content hash, and an on-chain record will appear here.</p>
+              <div className="output-icons">
+                <div><Link2 size={16} /><span>Source</span></div>
+                <div><Hash size={16} /><span>Hash</span></div>
+                <div><ShieldCheck size={16} /><span>Chain proof</span></div>
+                <div><FileCheck2 size={16} /><span>Verdict</span></div>
+              </div>
+            </div>
+          ) : (
+            <div className="verdict-block">
+              <span className={`badge ${verdictTone}`}>{verdict ?? "No verdict"}</span>
+              <div className="confidence">{formatPercent(result.match?.confidence)}</div>
+              <div className="confidence-label">final match confidence</div>
+              <div className="match-line"><span>Top source</span><b>{display(bestMetadata.platform)}</b></div>
+              <div className="match-line"><span>Evidence hash</span><b style={{ fontFamily: "var(--font-mono)", fontSize: 11 }}>{result.evidence_hash ? `${result.evidence_hash.slice(0, 10)}…` : "—"}</b></div>
+              <a className="jump-link" href="#results">View full evidence report <ArrowRight size={13} /></a>
+            </div>
+          )}
+        </div>
+      </section>
+
+      {result && (
+        <section className="results" id="results">
+          <div className="results-head">
+            <div><p className="kicker">Runtime results — nothing below is fabricated</p><h2>Evidence report</h2></div>
+          </div>
+
+          {candidateResults.length > 0 && (
+            <div className="match-list">
+              {candidateResults.map((item, index) => {
+                const href = typeof item.post_id === "string" && item.post_id.startsWith("http") ? item.post_id : undefined;
+                const { Icon, label } = platformFor(href ?? String(item.metadata?.platform ?? ""));
+                const title = String(item.metadata?.title ?? item.metadata?.caption ?? item.post_id ?? "Untitled source");
+                return (
+                  <a
+                    className={`match-row${href ? "" : " no-link"}`}
+                    key={`${item.post_id}-${index}`}
+                    href={href}
+                    target={href ? "_blank" : undefined}
+                    rel={href ? "noreferrer" : undefined}
+                  >
+                    <span className="platform-icon"><Icon size={16} /></span>
+                    <span className="info"><span className="platform">{label}</span><span className="title">{title}</span></span>
+                    {index === 0 && <span className="best-tag">Best match</span>}
+                    <span className="score">{formatPercent(item.similarity_score)}<small>similarity</small></span>
+                  </a>
+                );
+              })}
+            </div>
+          )}
+
+          <div className="grid-2">
+            <div className="card">
+              <div className="card-title"><ImageIcon size={14} /> FACE ANALYSIS</div>
+              {preview && <img src={preview} alt="Input face" style={{ width: 84, height: 84, objectFit: "cover", borderRadius: 4, border: "1px solid var(--line)", marginBottom: 14 }} />}
+              <div className="data-row"><span>Face detected</span><span className="val">{result.match ? "Yes" : "—"}</span></div>
+              <div className="data-row"><span>Embedding</span><span className="val">{result.search ? "512-d ArcFace" : "—"}</span></div>
+              <div className="data-row"><span>Search provider</span><span className="val">{display(result.search?.provider)}</span></div>
+              <div className="signal-bar">
+                <span>Face similarity</span>
+                <div className="track"><i style={{ width: `${Math.min(100, (result.match?.face_similarity ?? 0) * 100)}%` }} /></div>
+                <span className="value">{formatPercent(result.match?.face_similarity)}</span>
+              </div>
+              <div className="signal-bar">
+                <span>Image similarity</span>
+                <div className="track"><i style={{ width: `${Math.min(100, (result.match?.image_similarity ?? 0) * 100)}%` }} /></div>
+                <span className="value">{formatPercent(result.match?.image_similarity)}</span>
+              </div>
+              <div className="signal-bar">
+                <span>Metadata consistency</span>
+                <div className="track"><i style={{ width: `${Math.min(100, (result.match?.metadata_consistency ?? 0) * 100)}%` }} /></div>
+                <span className="value">{formatPercent(result.match?.metadata_consistency)}</span>
+              </div>
+            </div>
+
+            <div className="card">
+              <div className="card-title"><Fingerprint size={14} /> CRYPTOGRAPHIC EVIDENCE</div>
+              <div className="data-row"><span>Evidence ID</span><span className="val">{display(result.evidence?.evidence_id)} <CopyIcon value={typeof result.evidence?.evidence_id === "string" ? result.evidence.evidence_id : undefined} /></span></div>
+              <div className="data-row"><span>Pipeline ID</span><span className="val">{display(result.pipeline_id)} <CopyIcon value={result.pipeline_id} /></span></div>
+              <div className="hash-block">
+                <small>SHA-256 fingerprint</small>
+                <code>{display(result.evidence_hash)}</code>
+                <div style={{ position: "absolute", right: 10, top: 30 }}><CopyIcon value={result.evidence_hash} /></div>
+              </div>
+            </div>
+          </div>
+
+          <div className="grid-2">
+            <div className="card">
+              <div className="card-title"><Link2 size={14} /> BLOCKCHAIN RECORD</div>
+              <div className="data-row"><span>Contract</span><span className="val">{display(result.blockchain?.contract_address)} <CopyIcon value={result.blockchain?.contract_address} /></span></div>
+              <div className="data-row"><span>Transaction</span><span className="val">{display(result.blockchain?.transaction_hash)} <CopyIcon value={result.blockchain?.transaction_hash} /></span></div>
+              <div className="data-row"><span>Block</span><span className="val">{display(result.blockchain?.block_number)}</span></div>
+              <div className="data-row"><span>Timestamp</span><span className="val">{display(result.blockchain?.timestamp)}</span></div>
+            </div>
+            <div className="card">
+              <div className="card-title"><ShieldCheck size={14} /> RE-VERIFICATION</div>
+              <div className="data-row"><span>Status</span><span className="val">{display(result.reverification?.status)}</span></div>
+              <div className="data-row"><span>Local hash</span><span className="val">{result.reverification?.local_hash ? `${result.reverification.local_hash.slice(0, 14)}…` : "—"}</span></div>
+              <div className="data-row"><span>On-chain hash</span><span className="val">{result.reverification?.blockchain_hash ? `${result.reverification.blockchain_hash.slice(0, 14)}…` : "—"}</span></div>
+              <div className="data-row"><span>Reason</span><span className="val">{display(result.reverification?.reason)}</span></div>
+            </div>
+          </div>
+        </section>
+      )}
+
+      <footer className="site-footer">
+        <span><strong>TraceChain AI</strong> — authorized evidence infrastructure</span>
+        <span>No fabricated runtime data</span>
+        <span>v1.0 · local core</span>
+      </footer>
     </main>
   );
 }

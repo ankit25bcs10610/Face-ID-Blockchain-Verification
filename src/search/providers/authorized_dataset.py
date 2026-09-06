@@ -20,7 +20,9 @@ class AuthorizedDatasetProvider(SearchProvider):
         self.index_path = index_path or Path(settings.FAISS_DIR) / settings.INDEX_NAME
         self.manifest_path = manifest_path or Path(settings.FAISS_DIR) / settings.MANIFEST_NAME
 
-    def search(self, embedding: np.ndarray, top_k: int) -> list[CandidatePost]:
+    def search(
+        self, embedding: np.ndarray, top_k: int, image_path: str | Path | None = None
+    ) -> list[CandidatePost]:
         from src.search.orchestrator import search_candidates
 
         self.validate_source()

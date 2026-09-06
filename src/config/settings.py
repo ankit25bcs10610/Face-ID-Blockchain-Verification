@@ -44,6 +44,17 @@ METADATA_FIELDS = tuple(
 )
 EVIDENCE_DIR = os.getenv("EVIDENCE_DIR", "data/evidence")
 EVIDENCE_VERSION = os.getenv("EVIDENCE_VERSION", "1.0")
+SEARCH_PROVIDER = os.getenv("SEARCH_PROVIDER", "authorized_dataset").strip().lower()
+SERPAPI_API_KEY = os.getenv("SERPAPI_API_KEY", "")
+SERPAPI_ENDPOINT = os.getenv("SERPAPI_ENDPOINT", "https://serpapi.com/search.json")
+GITHUB_TOKEN = os.getenv("GITHUB_TOKEN", "")
+GITHUB_HOST_OWNER = os.getenv("GITHUB_HOST_OWNER", "")
+GITHUB_HOST_REPO = os.getenv("GITHUB_HOST_REPO", "tracechain-search-cache")
+GITHUB_HOST_BRANCH = os.getenv("GITHUB_HOST_BRANCH", "main")
+WEB_SEARCH_FACE_MATCH_THRESHOLD = float(os.getenv("WEB_SEARCH_FACE_MATCH_THRESHOLD", "0.35"))
+WEB_SEARCH_CACHE_DIR = os.getenv("WEB_SEARCH_CACHE_DIR", "data/web_search_cache")
+WEB_SEARCH_MAX_CANDIDATES_SCANNED = int(os.getenv("WEB_SEARCH_MAX_CANDIDATES_SCANNED", "15"))
+WEB_SEARCH_MAX_ATTEMPTS = int(os.getenv("WEB_SEARCH_MAX_ATTEMPTS", "3"))
 BLOCKCHAIN_RPC_URL = os.getenv("BLOCKCHAIN_RPC_URL", "")
 PRIVATE_KEY = os.getenv("PRIVATE_KEY", "")
 WALLET_ADDRESS = os.getenv("WALLET_ADDRESS", "")
@@ -72,3 +83,9 @@ def validate() -> None:
         raise ValueError("BLOCKCHAIN_MODE must be either local or rpc")
     if API_PORT <= 0 or API_MAX_UPLOAD_BYTES <= 0:
         raise ValueError("API_PORT and API_MAX_UPLOAD_BYTES must be greater than zero")
+    if SEARCH_PROVIDER not in {"authorized_dataset", "web_reverse_image"}:
+        raise ValueError("SEARCH_PROVIDER must be either authorized_dataset or web_reverse_image")
+    if SEARCH_PROVIDER == "web_reverse_image" and not SERPAPI_API_KEY:
+        raise ValueError("SERPAPI_API_KEY must be set when SEARCH_PROVIDER is web_reverse_image")
+    if SEARCH_PROVIDER == "web_reverse_image" and not GITHUB_HOST_OWNER:
+        raise ValueError("GITHUB_HOST_OWNER must be set when SEARCH_PROVIDER is web_reverse_image")

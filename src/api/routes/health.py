@@ -12,10 +12,16 @@ from src.api.schemas import HealthResponse
 router = APIRouter(tags=["health"])
 
 
+def _search_status() -> str:
+    if settings.SEARCH_PROVIDER == "web_reverse_image":
+        return "available" if settings.SERPAPI_API_KEY and settings.GITHUB_HOST_OWNER else "unavailable"
+    search_index = Path(settings.FAISS_DIR) / settings.INDEX_NAME
+    return "available" if search_index.is_file() else "unavailable"
+
+
 def _dependency_status() -> dict[str, str]:
     face_status = "available" if importlib.util.find_spec("insightface") else "unavailable"
-    search_index = Path(settings.FAISS_DIR) / settings.INDEX_NAME
-    search_status = "available" if search_index.is_file() else "unavailable"
+    search_status = _search_status()
     blockchain_status = "unavailable"
     if settings.BLOCKCHAIN_RPC_URL:
         try:

@@ -24,6 +24,7 @@ wallets/
 data/embeddings/*
 data/faiss/*
 data/evidence/*
+data/web_search_cache/*
 build/*
 
 # Keep directory markers
@@ -41,3 +42,4 @@ frontend/node_modules/
 frontend/.next/
 frontend/.env.local
 frontend/.env.*.local
+frontend/tsconfig.tsbuildinfo

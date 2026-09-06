@@ -96,7 +96,7 @@ def run_pipeline(
     print("[4/10] Searching authorized content...")
     search_response = execute_stage(
         "CONTENT_DISCOVERY",
-        lambda: search_detailed(embedding, top_k=top_k),
+        lambda: search_detailed(embedding, top_k=top_k, image_path=image_path),
     )
     candidates = search_response.results
     if not candidates:

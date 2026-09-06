@@ -1,6 +1,7 @@
 """Interfaces for permitted content search sources."""
 
 from abc import ABC, abstractmethod
+from pathlib import Path
 from typing import Any
 
 import numpy as np
@@ -14,8 +15,15 @@ class SearchProvider(ABC):
     name: str
 
     @abstractmethod
-    def search(self, embedding: np.ndarray, top_k: int) -> list[CandidatePost]:
-        """Return candidates retrieved from the configured authorized source."""
+    def search(
+        self, embedding: np.ndarray, top_k: int, image_path: str | Path | None = None
+    ) -> list[CandidatePost]:
+        """Return candidates retrieved from the configured source.
+
+        ``image_path`` is optional context for providers (such as a live web
+        search) that need the original image bytes in addition to the
+        embedding; providers that only need the embedding may ignore it.
+        """
 
     @abstractmethod
     def fetch_candidates(self) -> list[CandidatePost]:

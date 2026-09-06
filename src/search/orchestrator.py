@@ -112,22 +112,36 @@ def search(face_embedding: np.ndarray, top_k: int = settings.TOP_K) -> list[Cand
     return search_candidates(face_embedding, top_k=top_k)
 
 
+def _default_provider():
+    if settings.SEARCH_PROVIDER == "web_reverse_image":
+        from src.search.providers.web_reverse_image import WebReverseImageProvider
+
+        return WebReverseImageProvider()
+    from src.search.providers.authorized_dataset import AuthorizedDatasetProvider
+
+    return AuthorizedDatasetProvider()
+
+
 def search_detailed(
     face_embedding: np.ndarray,
     top_k: int = settings.TOP_K,
     provider=None,
+    image_path: str | Path | None = None,
 ) -> SearchResponse:
     """Execute a configured authorized provider search with dynamic audit metadata."""
     if provider is None:
-        from src.search.providers.authorized_dataset import AuthorizedDatasetProvider
-
-        provider = AuthorizedDatasetProvider()
+        provider = _default_provider()
     if top_k <= 0:
         raise SearchError("top_k must be greater than zero")
     query = np.asarray(face_embedding).reshape(-1)
     if query.size != 512:
         raise SearchError("Face embedding must be 512-dimensional")
-    results = provider.search(face_embedding, top_k)
+    try:
+        results = provider.search(face_embedding, top_k, image_path=image_path)
+    except SearchError:
+        raise
+    except Exception as exc:
+        raise SearchError(str(exc)) from exc
     return SearchResponse(
         search_id=str(uuid.uuid4()),
         timestamp=datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),

@@ -31,15 +31,14 @@ def align_face(image: np.ndarray, face: DetectedFace, output_size: int = 112) ->
 
 def extract_embedding(image_path: str | Path) -> np.ndarray:
     image, _ = validate_image(image_path)
-    face = detect_face(image_path)
-    aligned = align_face(image, face)
     try:
-        faces = get_face_app().get(aligned)
+        faces = get_face_app().get(image)
         if not faces:
-            raise EmbeddingError("No face detected after alignment")
-        embedding = getattr(faces[0], "normed_embedding", None)
+            raise EmbeddingError("No face detected during embedding generation")
+        selected = max(faces, key=lambda candidate: float(candidate.det_score))
+        embedding = getattr(selected, "normed_embedding", None)
         if embedding is None:
-            embedding = getattr(faces[0], "embedding", None)
+            embedding = getattr(selected, "embedding", None)
     except EmbeddingError:
         raise
     except Exception as exc:

@@ -133,7 +133,7 @@ def test_detailed_search_generates_dynamic_audit_metadata(monkeypatch):
     class Provider:
         name = "consented_fixture"
 
-        def search(self, embedding, top_k):
+        def search(self, embedding, top_k, image_path=None):
             return [CandidatePost("post", 0.8, "post.jpg", {})]
 
     response = orchestrator.search_detailed(np.ones(512, dtype=np.float32), provider=Provider())
