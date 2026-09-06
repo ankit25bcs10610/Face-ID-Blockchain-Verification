@@ -269,3 +269,5 @@ Unit tests use controlled doubles only at external model, FAISS, and blockchain 
 ## Contributor
 
 - [Ankit Pandey](https://github.com/ankit25bcs10610) - Project creator and maintainer
+
+TraceChain AI is maintained by Ankit Pandey.
