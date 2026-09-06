@@ -62,8 +62,16 @@ export type EvidenceSummary = {
   post_url?: string | null;
   final_confidence?: number | null;
   face_similarity?: number | null;
+  image_similarity?: number | null;
   verification_timestamp?: string | null;
+  has_query_image?: boolean;
+  has_matched_image?: boolean;
 };
+
+/** URL of an image stored alongside an evidence record. */
+export function evidenceMediaUrl(evidenceId: string, kind: "query" | "match") {
+  return endpoint(`/evidence/${encodeURIComponent(evidenceId)}/media/${kind}`);
+}
 
 export function listEvidence() {
   return request<{ count: number; records: EvidenceSummary[] }>("/evidence");

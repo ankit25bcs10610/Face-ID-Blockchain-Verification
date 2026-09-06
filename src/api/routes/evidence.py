@@ -5,9 +5,11 @@ from pathlib import Path
 from typing import Any
 
 from fastapi import APIRouter
+from fastapi.responses import FileResponse
 
 from src.api.errors import ApiFailure
 from src.config import settings
+from src.verification.evidence import media_dir
 
 router = APIRouter(tags=["evidence"])
 
@@ -38,16 +40,37 @@ def list_evidence() -> dict[str, Any]:
             record = _load(path)
         except ApiFailure:
             continue
+        media = record.get("media") if isinstance(record.get("media"), dict) else {}
         records.append({
             "evidence_id": record.get("evidence_id", path.stem),
             "platform": record.get("platform"),
             "post_url": record.get("post_url"),
             "final_confidence": record.get("final_confidence"),
             "face_similarity": record.get("face_similarity"),
+            "image_similarity": record.get("image_similarity"),
             "verification_timestamp": record.get("verification_timestamp"),
+            "has_query_image": bool(media.get("query_image")),
+            "has_matched_image": bool(media.get("matched_image")),
             "created_at": path.stat().st_mtime,
         })
     return {"count": len(records), "records": records}
+
+
+@router.get("/evidence/{evidence_id}/media/{kind}", summary="Read an image stored with an evidence record")
+def read_evidence_media(evidence_id: str, kind: str) -> FileResponse:
+    if kind not in {"query", "match"}:
+        raise ApiFailure("INVALID_MEDIA_KIND", "Media kind must be 'query' or 'match'.", 400)
+    record = read_evidence(evidence_id)
+    media = record.get("media")
+    if not isinstance(media, dict):
+        raise ApiFailure("MEDIA_NOT_FOUND", "This record has no stored images.", 404)
+    name = media.get("query_image" if kind == "query" else "matched_image")
+    if not isinstance(name, str) or "/" in name or "\\" in name:
+        raise ApiFailure("MEDIA_NOT_FOUND", f"No {kind} image stored for this record.", 404)
+    path = media_dir() / name
+    if not path.is_file():
+        raise ApiFailure("MEDIA_NOT_FOUND", f"The {kind} image file is missing.", 404)
+    return FileResponse(path)
 
 
 @router.get("/evidence/{evidence_id}", summary="Read one stored evidence record")

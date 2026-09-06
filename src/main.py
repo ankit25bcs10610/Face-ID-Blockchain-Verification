@@ -150,6 +150,7 @@ def run_pipeline(
             search=search_response,
             threshold=threshold,
             pipeline_id=pipeline_id,
+            query_image_path=image_path,
         )
         return evidence, save_evidence(evidence)
 

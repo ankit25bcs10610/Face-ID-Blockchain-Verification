@@ -1,6 +1,7 @@
 """Structured, deterministic evidence records for verified matches."""
 
 import json
+import shutil
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
@@ -23,22 +24,53 @@ def _json_safe(value: Any) -> Any:
     return value
 
 
+def media_dir() -> Path:
+    return Path(settings.EVIDENCE_DIR) / "media"
+
+
+def _persist_media(evidence_id: str, query_image: str | Path | None, matched_image: str | Path | None) -> dict | None:
+    """Copy the query and matched images next to the evidence record.
+
+    Only the relative filenames are stored in the record, so the canonical
+    hash stays portable across machines.
+    """
+    stored: dict[str, str] = {}
+    for kind, source in (("query_image", query_image), ("matched_image", matched_image)):
+        if not source:
+            continue
+        source_path = Path(source)
+        if not source_path.is_file():
+            continue
+        name = f"{evidence_id}-{'query' if kind == 'query_image' else 'match'}{source_path.suffix.lower() or '.jpg'}"
+        target = media_dir() / name
+        try:
+            target.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copyfile(source_path, target)
+        except OSError:
+            continue
+        stored[kind] = name
+    return stored or None
+
+
 def create_evidence(
     result: MatchResult,
     image_hash: str | None = None,
     search=None,
     threshold: float | None = None,
     pipeline_id: str | None = None,
+    query_image_path: str | Path | None = None,
 ) -> dict:
     if not isinstance(result, MatchResult):
         raise EvidenceError("result must be a MatchResult")
     if not result.match:
         raise EvidenceError("Evidence can only be generated for a verified match")
     metadata = result.candidate.metadata
+    evidence_id = str(uuid.uuid4())
     evidence = {
         "version": settings.EVIDENCE_VERSION,
-        "evidence_id": str(uuid.uuid4()),
+        "evidence_id": evidence_id,
         "pipeline_id": pipeline_id,
+        "media": _persist_media(evidence_id, query_image_path, result.candidate.image_path),
         "search": {
             "search_id": getattr(search, "search_id", None),
             "provider": getattr(search, "provider", None),
