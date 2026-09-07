@@ -26,6 +26,9 @@ data/faiss/*
 data/evidence/*
 data/web_search_cache/*
 build/*
+# The compiled ABI is required at runtime to talk to the deployed registry,
+# so it ships with the repo. It contains no secrets.
+!build/EvidenceRegistry.json
 
 # Keep directory markers
 !.gitkeep
@@ -40,6 +43,7 @@ build/*
 # Frontend build and dependency output
 frontend/node_modules/
 frontend/.next/
+frontend/out/
 frontend/.env.local
 frontend/.env.*.local
 frontend/tsconfig.tsbuildinfo

@@ -1,0 +1,174 @@
+# ORYNEX AI — Render Blueprint
+#
+# Two services:
+#   orynex-api      FastAPI + InsightFace pipeline, built from ./Dockerfile
+#   orynex-console  Next.js console, exported to static files and served on the CDN
+#
+# Secrets and chain settings are marked `sync: false` and are filled in the
+# Render Dashboard when the Blueprint is applied. See README "Deploying to Render".
+
+services:
+  # ---------------------------------------------------------------- API ----
+  - type: web
+    name: orynex-api
+    runtime: docker
+    # The face pipeline loads buffalo_l into ONNX Runtime; 512 MB (free/starter)
+    # is not enough headroom for detection at det_size 640, so this starts on
+    # standard (2 GB). A persistent disk also requires a paid instance type.
+    plan: standard
+    region: oregon
+    branch: master
+    autoDeploy: true
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    # `/` is a static JSON response. `/health` dials the chain RPC on every
+    # call, which would turn Render's health probe into a steady stream of
+    # billed RPC requests.
+    healthCheckPath: /
+
+    # Evidence records, the copied media, and the reverse-image cache are
+    # written to disk and must outlive a restart for verification to mean
+    # anything. EVIDENCE_DIR and the cache paths below point inside this mount.
+    disk:
+      name: orynex-evidence
+      mountPath: /app/data
+      sizeGB: 5
+
+    envVars:
+      # --- Storage (all under the mounted disk) ---
+      - key: EVIDENCE_DIR
+        value: /app/data/evidence
+      - key: WEB_SEARCH_CACHE_DIR
+        value: /app/data/web_search_cache
+      - key: POSTS_DIR
+        value: /app/data/posts
+      - key: EMBEDDINGS_DIR
+        value: /app/data/embeddings
+      - key: FAISS_DIR
+        value: /app/data/faiss
+      - key: EVIDENCE_VERSION
+        value: "1.0"
+
+      # --- API surface ---
+      - key: API_HOST
+        value: 0.0.0.0
+      - key: API_MAX_UPLOAD_BYTES
+        value: "10485760"
+      # Comma-separated origins allowed to call this API. Set this to the
+      # console's URL once it has one, e.g. https://orynex-console.onrender.com
+      - key: ALLOWED_ORIGINS
+        sync: false
+
+      # --- Face pipeline (CPU inference) ---
+      - key: FACE_MODEL_NAME
+        value: buffalo_l
+      - key: FACE_CTX_ID
+        value: "-1"
+      - key: FACE_DET_SIZE
+        value: "640"
+      - key: FACE_MIN_WIDTH
+        value: "160"
+      - key: FACE_MIN_HEIGHT
+        value: "160"
+      - key: FACE_MIN_QUALITY
+        value: "0.0"
+      - key: FACE_MIN_CONFIDENCE
+        value: "0.0"
+      - key: ALLOW_MULTIPLE_FACES
+        value: "false"
+
+      # --- Matching ---
+      - key: TOP_K
+        value: "5"
+      - key: MATCH_THRESHOLD
+        value: "0.80"
+      - key: FACE_SIMILARITY_WEIGHT
+        value: "0.70"
+      - key: IMAGE_SIMILARITY_WEIGHT
+        value: "0.20"
+      - key: METADATA_CONSISTENCY_WEIGHT
+        value: "0.10"
+      - key: METADATA_FIELDS
+        value: platform,caption,timestamp
+
+      # --- Search ---
+      # A deployed instance has no local corpus on a fresh disk, so live
+      # reverse-image search is the only provider that returns candidates.
+      - key: SEARCH_PROVIDER
+        value: web_reverse_image
+      - key: SERPAPI_API_KEY
+        sync: false
+      - key: SERPAPI_ENDPOINT
+        value: https://serpapi.com/search.json
+      - key: SERPAPI_UPLOAD_ENDPOINT
+        value: https://serpapi.com/image
+      - key: WEB_SEARCH_FACE_MATCH_THRESHOLD
+        value: "0.35"
+      - key: WEB_SEARCH_MAX_CANDIDATES_SCANNED
+        value: "15"
+      - key: WEB_SEARCH_MAX_ATTEMPTS
+        value: "3"
+
+      # --- Blockchain ---
+      # Registration is a mandatory pipeline stage, so these must point at a
+      # reachable chain. Ganache is a local dev chain and is not an option here;
+      # use a public testnet RPC (Sepolia by default) or your own node.
+      - key: BLOCKCHAIN_MODE
+        value: rpc
+      - key: CHAIN_ID
+        value: "11155111" # Sepolia. Change if you target another network.
+      # e.g. https://eth-sepolia.g.alchemy.com/v2/<key>
+      - key: BLOCKCHAIN_RPC_URL
+        sync: false
+      # A funded wallet dedicated to this service. Do NOT reuse the deterministic
+      # Ganache key from local development — its private key is public.
+      - key: PRIVATE_KEY
+        sync: false
+      - key: WALLET_ADDRESS
+        sync: false
+      # Address printed by scripts/deploy_contract.py when run against the
+      # network above.
+      - key: CONTRACT_ADDRESS
+        sync: false
+      - key: CONTRACT_ARTIFACT_PATH
+        value: build/EvidenceRegistry.json
+
+  # ------------------------------------------------------------ CONSOLE ----
+  - type: web
+    name: orynex-console
+    runtime: static
+    plan: free
+    branch: master
+    autoDeploy: true
+    rootDir: frontend
+    # NEXT_PUBLIC_* values are inlined at build time, so the API host is
+    # resolved from the service above and composed into a URL here.
+    buildCommand: npm ci && NEXT_PUBLIC_API_URL="https://$ORYNEX_API_HOST" npm run build
+    staticPublishPath: ./out
+
+    envVars:
+      - key: ORYNEX_API_HOST
+        fromService:
+          name: orynex-api
+          type: web
+          property: host
+      - key: NEXT_PUBLIC_PIPELINE_ENDPOINT
+        value: /pipeline/run
+      - key: NEXT_PUBLIC_VERIFY_ENDPOINT
+        value: /verify
+      - key: NEXT_PUBLIC_HEALTH_ENDPOINT
+        value: /health
+
+    headers:
+      - path: /_next/static/*
+        name: Cache-Control
+        value: public, max-age=31536000, immutable
+      - path: /*
+        name: X-Frame-Options
+        value: DENY
+      - path: /*
+        name: X-Content-Type-Options
+        value: nosniff
+      - path: /*
+        name: Referrer-Policy
+        value: strict-origin-when-cross-origin

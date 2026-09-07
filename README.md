@@ -49,6 +49,8 @@ ORYNEX AI does not treat a search provider’s ranking as proof. Candidates are 
 ├── src/             FastAPI, face, search, verification, and services
 ├── tests/            Automated test suite
 ├── data/             Local evidence, indexes, and runtime artifacts
+├── Dockerfile        API image: CV/ML stack and the baked-in model pack
+├── render.yaml       Render Blueprint for the API and console services
 └── .env.example      Configuration template
 ```
 
@@ -109,6 +111,46 @@ npm run dev -- --port 3000
 ```
 
 Swagger UI is available at `http://127.0.0.1:8000/docs`. If the API uses another origin, set `NEXT_PUBLIC_API_URL` in `frontend/.env.local` and include the frontend origin in `ALLOWED_ORIGINS`.
+
+## Deploying to Render
+
+`render.yaml` is a Render Blueprint that provisions the platform as two services:
+
+| Service | Type | Notes |
+| --- | --- | --- |
+| `orynex-api` | Docker web service | Built from `Dockerfile`; `buffalo_l` is baked into the image and a 5 GB disk is mounted at `/app/data` |
+| `orynex-console` | Static site | `next build` with `output: "export"`, served from the CDN |
+
+The console reads the API's hostname through `fromService`, so `NEXT_PUBLIC_API_URL` is composed at build time and needs no manual wiring.
+
+### Before you apply the Blueprint
+
+**Deploy the registry to a public network.** Blockchain registration is stage 9 of 10 and the pipeline fails without it. Ganache is a local development chain and is not reachable from Render, so point `deploy_contract.py` at a public testnet and note the address it prints:
+
+```bash
+BLOCKCHAIN_RPC_URL=https://eth-sepolia.g.alchemy.com/v2/<key> \
+PRIVATE_KEY=<funded testnet key> \
+WALLET_ADDRESS=<matching address> \
+python3 scripts/deploy_contract.py
+```
+
+Use a wallet created for this service. The deterministic Ganache account used in local development has a publicly known private key and must never hold real funds or sign on a public chain.
+
+**Have a SerpApi key ready.** A freshly mounted disk holds no local corpus, so `SEARCH_PROVIDER` is set to `web_reverse_image` and live search is the only provider that returns candidates.
+
+### Apply
+
+1. Commit and push `render.yaml`, `Dockerfile`, `.dockerignore`, and `build/EvidenceRegistry.json` to the `master` branch.
+2. Open `https://dashboard.render.com/blueprint/new?repo=<your repository URL>` and complete the Git OAuth prompt.
+3. Fill in the variables marked `sync: false`: `BLOCKCHAIN_RPC_URL`, `PRIVATE_KEY`, `WALLET_ADDRESS`, `CONTRACT_ADDRESS`, `SERPAPI_API_KEY`, and `ALLOWED_ORIGINS`. Adjust `CHAIN_ID` if you are not targeting Sepolia.
+4. Apply, and expect the first API build to take roughly 10–15 minutes — it installs the CV/ML stack and downloads the model pack.
+5. Once the console has a URL, set `ALLOWED_ORIGINS` on `orynex-api` to that origin (for example `https://orynex-console.onrender.com`). Browser requests fail CORS until this matches.
+
+### Instance sizing
+
+`orynex-api` is pinned to `standard` (2 GB) rather than the usual `free` default. Loading `buffalo_l` into ONNX Runtime and running one detection at `FACE_DET_SIZE=640` peaks at roughly 843 MB before any request-time work, so the 512 MB free and starter instances are killed on the first analysis. A persistent disk also requires a paid instance type, and evidence has to outlive a restart for verification to mean anything.
+
+Because a disk is attached, the service runs as a single instance and cannot use zero-downtime deploys or horizontal scaling. Moving evidence and media to object storage is what would lift that limit.
 
 ## Console pages
 

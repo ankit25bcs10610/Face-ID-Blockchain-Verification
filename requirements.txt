@@ -1,16 +1,18 @@
-insightface
-onnxruntime
-opencv-python
-numpy
-faiss-cpu
-web3
-py-solc-x
-python-dotenv
-Pillow
-ImageHash
-pytest
-fastapi
-uvicorn
-python-multipart
-requests
-httpx
+# Pinned to the versions this project is developed against, so a clean build on
+# a deploy host resolves the same native CV/ML stack that works locally.
+insightface==1.0.1
+onnxruntime==1.29.0
+opencv-python==5.0.0.93
+numpy==2.4.6
+faiss-cpu==1.15.0
+web3==8.0.0
+py-solc-x==2.0.5
+python-dotenv==1.2.3
+Pillow==12.3.0
+ImageHash==4.3.2
+pytest==9.1.1
+fastapi==0.141.1
+uvicorn==0.52.4
+python-multipart==0.0.32
+requests==2.34.2
+httpx==0.28.1

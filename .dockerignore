@@ -1,0 +1,32 @@
+# Secrets — never bake these into an image
+.env
+*.key
+*.pem
+wallets/
+
+# Local virtual environments and caches
+.venv/
+venv/
+env/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Runtime artifacts — these live on the mounted disk, not in the image
+data/
+
+# The console is deployed as its own service
+frontend/
+
+# Repository and editor metadata
+.git/
+.gitignore
+.idea/
+.vscode/
+*.log
+
+# Build recipe itself
+Dockerfile
+.dockerignore
